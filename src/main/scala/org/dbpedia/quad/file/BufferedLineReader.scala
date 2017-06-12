@@ -25,7 +25,7 @@ class BufferedLineReader(reader: Reader) extends BufferedReader(reader){
 
   def peek: String = if(currentLine == null) readLine() else currentLine
 
-  def gettLineCount = linecount
+  def getLineCount = linecount
 
   def hasMoreLines = !noMoreLines
 }

@@ -9,6 +9,7 @@ import org.dbpedia.quad.file.{FileLike, IOUtils}
 import org.dbpedia.quad.formatters.TerseFormatter
 import org.dbpedia.quad.formatters.UriPolicy.Policy
 import org.dbpedia.quad.utils.{StringUtils, TurtleUtils, UriUtils}
+import org.dbpedia.quad.file.IOUtils.writer
 
 import scala.Console.err
 
@@ -17,7 +18,7 @@ import scala.Console.err
  */
 class QuadMapper(log: FileLike[File] = null, reportInterval: Int = 100000, preamble: String = null) extends QuadReader(log, reportInterval, preamble) {
 
-  /**
+/*  /**
    * @deprecated use one of the map functions below
    */
   @Deprecated
@@ -46,7 +47,7 @@ class QuadMapper(log: FileLike[File] = null, reportInterval: Int = 100000, pream
     }
     finally writer.close()
     err.println(language+": mapped "+mapCount+" quads")
-  }
+  }*/
 
   /**
     * @deprecated don't use it any more!
@@ -72,6 +73,8 @@ class QuadMapper(log: FileLike[File] = null, reportInterval: Int = 100000, pream
    */
   def mapQuads(language: String, inFile: FileLike[_], outFile: FileLike[_], required: Boolean, quads: Boolean, turtle: Boolean, policies: Array[Policy])(map: Quad => Traversable[Quad]): Unit = {
     err.println(language+": writing "+outFile+" ...")
+    val destination = new WriterDestination(() => writer(outFile), new QuadMapperFormatter())
+    mapQuads(language, inFile, destination, required, true)(map)
   }
 
   /**
