@@ -78,7 +78,26 @@
                                 <jvmArg>-XX:-UseGCOverheadLimit</jvmArg>
                             </jvmArgs>
                         </launcher>
-
+                        <launcher>
+                            <id>solr-loader</id>
+                            <mainClass>org.dbpedia.quad.SolrLoader</mainClass>
+                            <args>
+                                <arg>/media/bigone/25TB/www/downloads.dbpedia.org/2016-10/core-i18n/en</arg>
+                                <arg>""</arg>
+                                <arg>"_en.ttl.bz2"</arg>
+                                <arg>http://vmdbpedia.informatik.uni-leipzig.de:10983/solr/dbpedia</arg>
+                                <arg>page_ids_sorted</arg>
+                                <arg>short_abstracts_sorted,article_categories_sorted,interlanguage_links_sorted,mappingbased_literals_sorted,infobox_properties_sorted,labels_sorted,instance_types_sorted</arg>
+                            </args>
+                            <jvmArgs>
+                                <jvmArg>-server</jvmArg>
+                                <jvmArg>-Xmx8G</jvmArg>
+                                <jvmArg>-Xms4G</jvmArg>
+                                <jvmArg>-XX:+HeapDumpOnOutOfMemoryError</jvmArg>
+                                <jvmArg>-XX:+UseConcMarkSweepGC</jvmArg>
+                                <jvmArg>-XX:-UseGCOverheadLimit</jvmArg>
+                            </jvmArgs>
+                        </launcher>
                     </launchers>
                 </configuration>
             </plugin>
