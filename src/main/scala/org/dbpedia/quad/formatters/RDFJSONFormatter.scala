@@ -1,15 +1,16 @@
 package org.dbpedia.quad.formatters
 
-import org.dbpedia.quad.formatters.UriPolicy._
-
 /**
  * Serialize quads to RDF/JSON
  */
-class RDFJSONFormatter(policies: Array[Policy] = null)
-  extends TripleFormatter(() => new RDFJSONBuilder(policies)) {
+class RDFJSONFormatter()
+  extends TripleFormatter(() => new RDFJSONBuilder()) {
 
   override def header = ""
 
   override def footer = ""
 
+  override def setHeader(head: String): Unit = ???
+
+  override def setFooter(foot: String): Unit = ???
 }

@@ -10,10 +10,11 @@ import org.dbpedia.quad.formatters.Formatter
  * 
  * @param called in open() to obtain the writer.
  */
-class WriterDestination(factory: () => Writer, formatter : Formatter)
+class WriterDestination(factory: () => Writer, val formatter : Formatter)
 extends Destination
 {
   private var writer: Writer = null
+  private var countQuads = 0
   
   override def open() = {
     if(writer == null) //to prevent errors when called twice
@@ -31,13 +32,18 @@ extends Destination
   override def write(graph : Traversable[Quad]) = synchronized {
     for(quad <- graph) {
       writer.write(formatter.render(quad))
+      countQuads += 1
     }
   }
 
   override def close() = {
     if(writer != null) {
       writer.write(formatter.footer)
+      System.err.println("Writing completed after " + countQuads + " quads")
       writer.close()
     }
   }
+
+  def setHeader(head: String): Unit = formatter.setHeader(head)
+  def setFooter(foot: String): Unit = formatter.setFooter(foot)
 }

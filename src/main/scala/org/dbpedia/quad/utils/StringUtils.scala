@@ -54,7 +54,7 @@ object StringUtils
     }
     n.toString
   }
-  
+
   /**
    * Build a copy of the first string in which all occurrences of chars from the third string
    * have been converted to UTF-8 hex escapes where each two-digit hex byte is prefixed by the 
@@ -266,6 +266,16 @@ object StringUtils
     md5.update(inputBytes)
 
     md5.digest().map(0xFF & _).map { "%02x".format(_) }.foldLeft(""){_ + _}
+  }
+
+  /**
+    * with zip/unzip we get the longest prefix of two strings
+    * @param str1
+    * @param str2
+    * @return the prefix
+    */
+  def getLongestPrefix(str1: String, str2: String): String ={
+    str1.zip(str2).takeWhile(z => z._1 == z._2).unzip._1.mkString
   }
   
   object IntLiteral {

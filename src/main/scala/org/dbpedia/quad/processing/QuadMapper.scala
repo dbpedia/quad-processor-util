@@ -5,10 +5,9 @@ import java.io.File
 
 import org.dbpedia.quad.Quad
 import org.dbpedia.quad.destination.{Destination, WriterDestination}
-import org.dbpedia.quad.file.{FileLike, IOUtils}
+import org.dbpedia.quad.file.{FileLike}
 import org.dbpedia.quad.formatters.TerseFormatter
-import org.dbpedia.quad.formatters.UriPolicy.Policy
-import org.dbpedia.quad.utils.{StringUtils, TurtleUtils, UriUtils}
+import org.dbpedia.quad.utils.{TurtleUtils, UriUtils}
 import org.dbpedia.quad.file.IOUtils.writer
 
 import scala.Console.err
@@ -17,37 +16,6 @@ import scala.Console.err
  * Maps old quads/triples to new quads/triples.
  */
 class QuadMapper(log: FileLike[File] = null, reportInterval: Int = 100000, preamble: String = null) extends QuadReader(log, reportInterval, preamble) {
-
-/*  /**
-   * @deprecated use one of the map functions below
-   */
-  @Deprecated
-  def mapQuads(language: String, inFile: FileLike[_], outFile: FileLike[_], required: Boolean = true, append: Boolean = false)(map: Quad => Traversable[Quad]): Unit = {
-    
-    if (! inFile.exists) {
-      if (required) throw new IllegalArgumentException(language+": file "+inFile+" does not exist")
-      err.println(language+": WARNING - file "+inFile+" does not exist")
-      return
-    }
-
-    err.println(language+": writing "+outFile+" ...")
-    var mapCount = 0
-    val writer = IOUtils.writer(outFile, append)
-    try {
-      // copied from org.dbpedia.extraction.destinations.formatters.TerseFormatter.footer
-      writer.write("# started "+StringUtils.formatCurrentTimestamp+"\n")
-      readQuads(language, inFile) { old =>
-        for (quad <- map(old)) {
-          writer.write(quadToString(quad))
-          mapCount += 1
-        }
-      }
-      // copied from org.dbpedia.extraction.destinations.formatters.TerseFormatter.header
-      writer.write("# completed "+StringUtils.formatCurrentTimestamp+"\n")
-    }
-    finally writer.close()
-    err.println(language+": mapped "+mapCount+" quads")
-  }*/
 
   /**
     * @deprecated don't use it any more!
@@ -71,7 +39,7 @@ class QuadMapper(log: FileLike[File] = null, reportInterval: Int = 100000, pream
 
   /**
    */
-  def mapQuads(language: String, inFile: FileLike[_], outFile: FileLike[_], required: Boolean, quads: Boolean, turtle: Boolean, policies: Array[Policy])(map: Quad => Traversable[Quad]): Unit = {
+  def mapQuads(language: String, inFile: FileLike[_], outFile: FileLike[_], required: Boolean, quads: Boolean, turtle: Boolean)(map: Quad => Traversable[Quad]): Boolean = {
     err.println(language+": writing "+outFile+" ...")
     val destination = new WriterDestination(() => writer(outFile), new QuadMapperFormatter())
     mapQuads(language, inFile, destination, required, true)(map)
@@ -82,17 +50,17 @@ class QuadMapper(log: FileLike[File] = null, reportInterval: Int = 100000, pream
    * from multiple input files to one destination. On the other hand, if the input file doesn't
    * exist, we probably shouldn't open the destination at all, so it's ok that it's happening in
    * this method after checking the input file.
-    * Chile: made closing optional, also WriteDestination can only open Writer one now
+    * Chile: made closing optional, also WriterDestination can only open Writer once now
    */
-  def mapQuads(language: String, inFile: FileLike[_], destination: Destination, required: Boolean, closeWriter: Boolean)(map: Quad => Traversable[Quad]): Unit = {
+  def mapQuads(language: String, inFile: FileLike[_], destination: Destination, required: Boolean, closeWriter: Boolean)(map: Quad => Traversable[Quad]): Boolean = {
     
     if (! inFile.exists) {
       if (required) throw new IllegalArgumentException(language+": file "+inFile+" does not exist")
-      return
+      return false      //return stating that the file was not completely read
     }
 
     destination.open()
-    try {
+    val ret = try {
       readQuads(language, inFile) { old =>
         destination.write(map(old))
       }
@@ -100,7 +68,8 @@ class QuadMapper(log: FileLike[File] = null, reportInterval: Int = 100000, pream
     finally
       if(closeWriter)
         destination.close()
-    //err.println(language.wikiCode+": mapped "+mapCount+" quads")
+
+    ret
   }
 
   /**
@@ -109,17 +78,17 @@ class QuadMapper(log: FileLike[File] = null, reportInterval: Int = 100000, pream
     * exist, we probably shouldn't open the destination at all, so it's ok that it's happening in
     * this method after checking the input file.
     */
-  def mapSortedQuads(language: String, inFile: FileLike[_], destination: Destination, required: Boolean)(map: Traversable[Quad] => Traversable[Quad]): Unit = {
+  def mapSortedQuads(language: String, inFile: FileLike[_], destination: Destination, required: Boolean)(map: Traversable[Quad] => Traversable[Quad]): Boolean = {
 
     if (! inFile.exists) {
       if (required) throw new IllegalArgumentException(language+": file "+inFile+" does not exist")
       err.println(language+": WARNING - file "+inFile+" does not exist")
-      return
+      return false
     }
 
     var mapCount = 0
     destination.open()
-    try {
+    val ret = try {
       readSortedQuads(language, inFile) { old =>
         destination.write(map(old))
         mapCount += old.size
@@ -127,12 +96,14 @@ class QuadMapper(log: FileLike[File] = null, reportInterval: Int = 100000, pream
     }
     finally destination.close()
     err.println(language+": mapped "+mapCount+" quads")
+
+    ret
   }
 }
 
-class QuadMapperFormatter(quad: Boolean = true, turtle: Boolean = true, policies: Array[Policy]= null) extends TerseFormatter(quad, turtle, policies) {
+class QuadMapperFormatter(quad: Boolean = true, turtle: Boolean = true) extends TerseFormatter(quad, turtle) {
   def this(formatter: TerseFormatter){
-    this(formatter.quads, formatter.turtle, formatter.policies)
+    this(formatter.quads, formatter.turtle)
   }
   private var contextAdditions = Map[String, String]()
 

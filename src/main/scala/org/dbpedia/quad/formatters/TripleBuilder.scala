@@ -23,3 +23,18 @@ trait TripleBuilder {
   
   def result(): String
 }
+
+object TripleBuilder{
+  // codes for URI positions
+  val SUBJECT = 0
+  val PREDICATE = 1
+  val OBJECT = 2
+  val DATATYPE = 3
+  val CONTEXT = 4
+
+  // total number of URI positions
+  val POSITIONS = 5
+
+  // indicates that a predicate matches all positions
+  val ALL = -1
+}

@@ -2,13 +2,9 @@ package org.dbpedia.quad.formatters
 
 import java.net.{URI, URISyntaxException}
 
-import org.dbpedia.quad.formatters.UriPolicy._
+import org.dbpedia.quad.formatters.TripleBuilder._
 
-/**
- * @param policies Mapping from URI positions (as defined in UriPolicy) to URI policy functions.
- * Must have five (UriPolicy.POSITIONS) elements. If null, URIs will not be modified.
- */
-abstract class UriTripleBuilder(policies: Array[Policy] = null) extends TripleBuilder {
+abstract class UriTripleBuilder() extends TripleBuilder {
   
   protected val BadUri = "BAD URI: "
   
@@ -25,7 +21,7 @@ abstract class UriTripleBuilder(policies: Array[Policy] = null) extends TripleBu
     try {
       var uri = new URI(str)
       if (! uri.isAbsolute()) return BadUri+"not absolute: "+str
-      if (policies != null) uri = policies(pos)(uri)
+      //if (policies != null) uri = policies(pos)(uri)
       uri.toString
     } catch {
       case usex: URISyntaxException =>

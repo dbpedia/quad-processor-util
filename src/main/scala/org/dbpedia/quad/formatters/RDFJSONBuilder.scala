@@ -1,12 +1,12 @@
 package org.dbpedia.quad.formatters
 
-import org.dbpedia.quad.formatters.UriPolicy._
+import org.dbpedia.quad.formatters.TripleBuilder._
 
 /*
 * Serializes a single quad to JDF/JSON
 * */
-class RDFJSONBuilder(policies: Array[Policy] = null)
-  extends UriTripleBuilder(policies) {
+class RDFJSONBuilder()
+  extends UriTripleBuilder() {
 
   // Scala's StringBuilder doesn't have appendCodePoint
   private val sb = new java.lang.StringBuilder

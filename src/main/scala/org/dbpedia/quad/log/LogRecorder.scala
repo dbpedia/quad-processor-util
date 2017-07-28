@@ -27,7 +27,7 @@ class LogRecorder[T](
   private val startTime = new AtomicLong()
   private var successfulPageCount = Map[String,AtomicLong]()
 
-  private var defaultLang: String = "en"
+  private var defaulttag: String = "en"
 
   private val decForm = new DecimalFormat("#.##")
 
@@ -38,17 +38,17 @@ class LogRecorder[T](
   /**
     * A map for failed pages, which could be used for a better way to record extraction fails than just a simple console output.
     *
-    * @return the failed pages (id, title) for every Language
+    * @return the failed pages (id, title) for every tag
     */
   def listFailedPages: Map[String, mutable.Map[(String, T), Throwable]] = failedPageMap
 
   /**
     * successful page count
     *
-    * @param lang - for this language
+    * @param tag - for this tag
     * @return
     */
-  def successfulPages(lang: String): Long = successfulPageCount.get(lang) match{
+  def successfulPages(tag: String): Long = successfulPageCount.get(tag) match{
     case Some(m) => m.get()
     case None => 0
   }
@@ -56,14 +56,14 @@ class LogRecorder[T](
   /**
     * get successful page count after increasing it by one
     *
-    * @param lang - for this language
+    * @param tag - for this tag
     * @return
     */
-  def increaseAndGetSuccessfulPages(lang: String): Long ={
-    successfulPageCount.get(lang) match {
+  def increaseAndGetSuccessfulPages(tag: String): Long ={
+    successfulPageCount.get(tag) match {
       case Some(ai) => ai.incrementAndGet()
       case None => {
-        successfulPageCount += (lang -> new AtomicLong(1))
+        successfulPageCount += (tag -> new AtomicLong(1))
         1
       }
     }
@@ -72,10 +72,10 @@ class LogRecorder[T](
   /**
     * number of failed pages
     *
-    * @param lang - for this language
+    * @param tag - for this tag
     * @return
     */
-  def failedPages(lang: String): Long = failedPageMap.get(lang) match{
+  def failedPages(tag: String): Long = failedPageMap.get(tag) match{
     case Some(m) => m.size
     case None => 0
   }
@@ -83,10 +83,10 @@ class LogRecorder[T](
   /**
     * the current accumulated page number
     *
-    * @param lang - for this language
+    * @param tag - for this tag
     * @return
     */
-  def runningPageNumber(lang:String) = successfulPages(lang) + failedPages(lang)
+  def runningPageNumber(tag:String) = successfulPages(tag) + failedPages(tag)
 
   /**
     * prints a message of a RecordEntry if available and
@@ -97,29 +97,29 @@ class LogRecorder[T](
     */
   def record(records: RecordEntry[T]*): Unit = {
     for(record <- records) {
-      //val count = increaseAndGetSuccessfulPages(record.language)
+      //val count = increaseAndGetSuccessfulPages(record.tag)
       record.page match{
         case quad: Quad =>{
           Option(record.error) match {
-            case Some(ex) => failedRecord(quad.subject, runningPageNumber(record.language).toString, record.page, ex, record.language)
-            case None => recordQuad(quad, record.severity, record.language)
+            case Some(ex) => failedRecord(quad.subject, runningPageNumber(record.tag).toString, record.page, ex, record.tag)
+            case None => recordQuad(quad, record.severity, record.tag)
           }
         }
         case _  => {
           if (record.errorMsg != null)
-            printLabeledLine(record.errorMsg, record.severity, record.language, Seq(PrinterDestination.err, PrinterDestination.file))
+            printLabeledLine(record.errorMsg, record.severity, record.tag, Seq(PrinterDestination.err, PrinterDestination.file))
           Option(record.error) match {
-            case Some(ex) => failedRecord(record.title, record.id.toString, record.page, ex, record.language)
+            case Some(ex) => failedRecord(record.title, record.id.toString, record.page, ex, record.tag)
             case None => recordExtractedRecord(record, record.logSuccessfulPage)
           }
           val msg = Option(record.errorMsg) match{
             case Some(m) => m
             case None => {
               if(record.error != null) record.error.getMessage
-              else "an undefined error occurred at quad: " + successfulPages(record.language)
+              else "an undefined error occurred at quad: " + successfulPages(record.tag)
             }
           }
-          printLabeledLine(msg, record.severity, record.language, null)
+          printLabeledLine(msg, record.severity, record.tag, null)
         }
       }
     }
@@ -132,19 +132,19 @@ class LogRecorder[T](
     * @param node - PageNode of page
     * @param exception  - the Throwable responsible for the fail
     */
-  def failedRecord(name: String, id: String, node: T, exception: Throwable, language:String = null): Unit = synchronized{
-    val lang = if(language != null) language else defaultLang
-    val tag = node match{
+  def failedRecord(name: String, id: String, node: T, exception: Throwable, tag:String = null): Unit = synchronized{
+    val tagi = if(tag != null) tag else defaulttag
+    val instanceName = node match{
       case q: Quad => "quad"
       case _ => "instance"
     }
-    failedPageMap.get(lang) match{
+    failedPageMap.get(tagi) match{
       case Some(map) => map += ((id,node) -> exception)
-      case None =>  failedPageMap += lang -> mutable.Map[(String, T), Throwable]((id, node) -> exception)
+      case None =>  failedPageMap += tagi -> mutable.Map[(String, T), Throwable]((id, node) -> exception)
     }
-    printLabeledLine("extraction failed for " + tag + " " + id + ": " + name + ": " + exception.getMessage(), RecordSeverity.Exception, lang, Seq(PrinterDestination.err, PrinterDestination.file))
+    printLabeledLine("extraction failed for " + instanceName + " " + id + ": " + name + ": " + exception.getMessage(), RecordSeverity.Exception, tagi, Seq(PrinterDestination.err, PrinterDestination.file))
     for (ste <- exception.getStackTrace)
-      printLabeledLine("\t" + ste.toString, RecordSeverity.Exception, lang, Seq(PrinterDestination.file), noLabel = true)
+      printLabeledLine("\t" + ste.toString, RecordSeverity.Exception, tagi, Seq(PrinterDestination.file), noLabel = true)
   }
 
   /**
@@ -155,38 +155,38 @@ class LogRecorder[T](
     */
   def recordExtractedRecord(record: RecordEntry[T], logSuccessfulPage:Boolean = false): Unit = synchronized {
     if(logSuccessfulPage) {
-      successfulPagesMap.get(record.language) match {
+      successfulPagesMap.get(record.tag) match {
         case Some(map) => map += (record.id -> record.title)
-        case None => successfulPagesMap += record.language -> mutable.Map[String, String](record.id.toString -> record.title)
+        case None => successfulPagesMap += record.tag -> mutable.Map[String, String](record.id.toString -> record.title)
       }
-      printLabeledLine("record " + record.id + ": " + record.title + " successful", RecordSeverity.Info, record.language, Seq(PrinterDestination.file))
+      printLabeledLine("record " + record.id + ": " + record.title + " successful", RecordSeverity.Info, record.tag, Seq(PrinterDestination.file))
     }
-    val pages = increaseAndGetSuccessfulPages(record.language)
+    val pages = increaseAndGetSuccessfulPages(record.tag)
     if(pages % reportInterval == 0)
-      printLabeledLine("{page} records; {mspp} per page; {fail} failed record", RecordSeverity.Info, record.language)
+      printLabeledLine("{page} records; {mspp} per page; {fail} failed record", RecordSeverity.Info, record.tag)
   }
 
   /**
     * record (successful) quad
     *
     * @param quad
-    * @param lang
+    * @param tag
     */
-  def recordQuad(quad: Quad, severity: RecordSeverity.Value, lang:String): Unit = synchronized {
-    if(increaseAndGetSuccessfulPages(lang) % reportInterval == 0)
-      printLabeledLine("processed {page} quads; {mspp} per quad; {fail} failed quads", severity, lang)
+  def recordQuad(quad: Quad, severity: RecordSeverity.Value, tag:String): Unit = synchronized {
+    if(increaseAndGetSuccessfulPages(tag) % reportInterval == 0)
+      printLabeledLine("processed {page} quads; {mspp} per quad; {fail} failed quads", severity, tag)
   }
 
     /**
     * print a line to std out, err or the log file
     *
     * @param line - the line in question
-    * @param language - langauge of current page
+    * @param tag - tag of current page
     * @param print - enum values for printer destinations (err, out, file - null mean all of them)
-    * @param noLabel - the initial label (lang: time passed) is omitted
+    * @param noLabel - the initial label (tag: time passed) is omitted
     */
-  def printLabeledLine(line:String, severity: RecordSeverity.Value, language: String = null, print: Seq[PrinterDestination.Value] = null, noLabel: Boolean = false): Unit ={
-    val lang = if(language != null) language else defaultLang
+  def printLabeledLine(line:String, severity: RecordSeverity.Value, tag: String = null, print: Seq[PrinterDestination.Value] = null, noLabel: Boolean = false): Unit ={
+    val tagi = if(tag != null) tag else defaulttag
     val printOptions = if(print == null) {
       if(severity == RecordSeverity.Exception )
         Seq(PrinterDestination.err, PrinterDestination.out, PrinterDestination.file)
@@ -196,8 +196,8 @@ class LogRecorder[T](
         Seq(PrinterDestination.file)
     } else print
 
-    val status = getStatusValues(lang)
-    val replacedLine = (if (noLabel) "" else severity.toString + "; " + lang + "; extraction at {time}{data}; ") + line
+    val status = getStatusValues(tagi)
+    val replacedLine = (if (noLabel) "" else severity.toString + "; " + tagi + "; extraction at {time}{data}; ") + line
     val pattern = "\\{\\s*\\w+\\s*\\}".r
     var lastend = 0
     var resultString = ""
@@ -229,10 +229,10 @@ class LogRecorder[T](
       }
   }
 
-  def getStatusValues(lang: String): Map[String, String] = {
-    val pages = successfulPages(lang)
+  def getStatusValues(tag: String): Map[String, String] = {
+    val pages = successfulPages(tag)
     val time = System.currentTimeMillis - startTime.get
-    val failed = failedPages(lang)
+    val failed = failedPages(tag)
 
     Map("pages" -> pages.toString,
       "failed" -> failed.toString,
@@ -243,20 +243,20 @@ class LogRecorder[T](
     )
   }
 
-  def initialize(lang: String, datasets: Seq[String] = Seq()): Unit ={
+  def initialize(tag: String, datasets: Seq[String] = Seq()): Unit ={
     failedPageMap = Map[String, scala.collection.mutable.Map[(String, T), Throwable]]()
     successfulPagesMap = Map[String, scala.collection.mutable.Map[String, String]]()
     successfulPageCount = Map[String,AtomicLong]()
 
     startTime.set(System.currentTimeMillis)
-    defaultLang = lang
+    defaulttag = tag
     this.datasets = datasets
 
     if(preamble != null)
-      printLabeledLine(preamble, RecordSeverity.Info, lang)
+      printLabeledLine(preamble, RecordSeverity.Info, tag)
 
-    val line = "Extraction started for language: " + lang + " (" + lang + ")" + (if (datasets.nonEmpty) " on " + datasets.size + " datasets." else "")
-    printLabeledLine(line, RecordSeverity.Info, lang)
+    val line = "Extraction started for tag: " + tag + " (" + tag + ")" + (if (datasets.nonEmpty) " on " + datasets.size + " datasets." else "")
+    printLabeledLine(line, RecordSeverity.Info, tag)
   }
 
   override def finalize(): Unit ={
@@ -265,17 +265,17 @@ class LogRecorder[T](
       writerOpen = false
     }
 
-    val line = "Extraction finished for language: " + defaultLang + " (" + defaultLang + ") " +
-      (if(datasets.nonEmpty) ", extracted " + successfulPages(defaultLang) + " records for " + datasets.size + " datasets after " + StringUtils.prettyMillis(System.currentTimeMillis - startTime.get) + " minutes." else "")
-    printLabeledLine(line, RecordSeverity.Info, defaultLang)
+    val line = "Extraction finished for tag: " + defaulttag + " (" + defaulttag + ") " +
+      (if(datasets.nonEmpty) ", extracted " + successfulPages(defaulttag) + " records for " + datasets.size + " datasets after " + StringUtils.prettyMillis(System.currentTimeMillis - startTime.get) + " minutes." else "")
+    printLabeledLine(line, RecordSeverity.Info, defaulttag)
 
     super.finalize()
   }
 
-  def resetFailedPages(lang: String) = failedPageMap.get(lang) match{
+  def resetFailedPages(tag: String) = failedPageMap.get(tag) match{
     case Some(m) => {
       m.clear()
-      successfulPageCount(lang).set(0)
+      successfulPageCount(tag).set(0)
     }
     case None =>
   }
@@ -294,7 +294,7 @@ class LogRecorder[T](
   * This class provides the necessary attributes to record either a successful or failed extraction
   *
   * @param page
-  * @param language
+  * @param tag
   * @param errorMsg
   * @param error
   * @param logSuccessfulPage
@@ -304,7 +304,7 @@ class RecordEntry[T](
   val title: String,
   val page: T,
   val severity: RecordSeverity.Value,
-  val language: String,
+  val tag: String,
   val errorMsg: String= null,
   val error:Throwable = null,
   val logSuccessfulPage:Boolean = false

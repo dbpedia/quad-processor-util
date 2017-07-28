@@ -2,13 +2,11 @@ package org.dbpedia.quad.file
 
 import java.io._
 import java.nio.charset.Charset
-import java.util.zip.{GZIPInputStream, GZIPOutputStream}
+import java.util.zip.{GZIPInputStream, GZIPOutputStream, Inflater, InflaterInputStream}
 
 import org.apache.commons.compress.compressors.bzip2.{BZip2CompressorInputStream, BZip2CompressorOutputStream}
 
 import scala.io.Codec
-
-import org.dbpedia.quad.file.RichReader.wrapReader
 
 /**
  * TODO: modify the bzip code such that there are no run-time dependencies on commons-compress.
@@ -20,7 +18,7 @@ object IOUtils {
   /**
    * Map from file suffix (without "." dot) to output stream wrapper
    */
-  val zippers = Map[String, OutputStream => OutputStream] (
+  val zippers: Map[String, (OutputStream) => OutputStream] = Map[String, OutputStream => OutputStream] (
     "gz" -> { new GZIPOutputStream(_) }, 
     "bz2" -> { new BZip2CompressorOutputStream(_) } 
   )
@@ -28,7 +26,7 @@ object IOUtils {
   /**
    * Map from file suffix (without "." dot) to input stream wrapper
    */
-  val unzippers = Map[String, InputStream => InputStream] (
+  val unzippers: Map[String, (InputStream) => InputStream] = Map[String, InputStream => InputStream] (
     "gz" -> { new GZIPInputStream(_) }, 
     "bz2" -> { new BZip2CompressorInputStream(_, true) } 
   )
@@ -53,6 +51,44 @@ object IOUtils {
    */
   def inputStream(file: FileLike[_]): InputStream =
     open(file, _.inputStream(), unzippers)
+
+  def estimateCompressionRatio(file: FileLike[_]): Double ={
+    val compIn = inputStream(file)
+    val array = new Array[Byte](1000000)
+    compIn.read(array)
+
+    val compressedBytes = compIn match{
+      case bz2: BZip2CompressorInputStream =>
+        val bos = new ByteArrayOutputStream()
+        val bzout = new BZip2CompressorOutputStream(bos)
+        bzout.write(array)
+        bzout.finish()
+        bzout.close()
+        bos.close()
+        bos.size()
+      case gz: InflaterInputStream => Option(gz.getClass.getDeclaredField("inf")) match {  //TODO test this
+        case Some(field) => field.get(gz).asInstanceOf[Inflater].getBytesWritten
+        case None => 1d
+      }
+      case _ => 1d
+    }
+    compIn.close()
+    1000000/compressedBytes
+  }
+
+  /**
+    * a simple concatenation of files with bash - cat also allows for concatenating compressed files
+    * @param files
+    * @param outFile
+    */
+  def concatFile(files: List[FileLike[_]], outFile: FileLike[_]): Int = {
+    var command = "cat "
+    for(i <- files.indices)
+      command += files(i).getFile.getAbsolutePath + " "
+    command += "> " + outFile.getFile.getAbsolutePath
+    val camArray = collection.JavaConversions.seqAsJavaList(List( "/bin/bash", "-c", command ))
+    new ProcessBuilder(camArray).start().waitFor()
+  }
   
   /**
    * open output stream, wrap in zipper stream if file suffix indicates compressed file,
@@ -77,7 +113,7 @@ object IOUtils {
    * proc will be null.
    */
   def readLines(file: FileLike[_], charset: Charset = Codec.UTF8.charSet)(proc: String => Unit): Unit = {
-    val reader = this.reader(file)
+    val reader = this.bufferedReader(file)
     try {
       for (line <- reader) {
         proc(line)
@@ -96,11 +132,10 @@ object IOUtils {
       val read = in.read(buf)
       if (read == -1)
       {
-        out.flush
+        out.flush()
         return
       }
       out.write(buf, 0, read)
     }
   }
-
 }

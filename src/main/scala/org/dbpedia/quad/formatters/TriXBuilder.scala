@@ -1,8 +1,8 @@
 package org.dbpedia.quad.formatters
 
 import org.dbpedia.quad.formatters.TriXBuilder._
-import org.dbpedia.quad.formatters.UriPolicy._
 import org.dbpedia.quad.utils.XmlUtils
+import org.dbpedia.quad.formatters.TripleBuilder._
 
 object TriXBuilder {
   private val spaces = (2 to (6, step = 2)).map(" " * _)
@@ -13,12 +13,10 @@ object TriXBuilder {
  * See: http://www.hpl.hp.com/techreports/2004/HPL-2004-56.html
  * 
  * Objects of this class are not re-usable - create a new object for each triple.
- * 
- * @param policies Mapping from URI positions (as defined in UriPolicy) to URI policy functions.
- * Must have five (UriPolicy.POSITIONS) elements. If null, URIs will not be modified.
+ *
  */
-class TriXBuilder(quads: Boolean, policies: Array[Policy] = null)
-extends UriTripleBuilder(policies) {
+class TriXBuilder(quads: Boolean)
+extends UriTripleBuilder() {
   
   private var depth = 0
   

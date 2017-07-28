@@ -1,6 +1,7 @@
 package org.dbpedia.quad.destination
 
 import org.dbpedia.quad.Quad
+import org.dbpedia.quad.formatters.Formatter
 
 import scala.collection.mutable.LinkedHashSet
 
@@ -15,4 +16,9 @@ extends WrapperDestination(destination)
       unique ++= graph
       super.write(unique)
     }
+
+  /**
+    * provide information about the intended format (syntax) of the destination file
+    */
+  override val formatter: Formatter = destination.formatter
 }

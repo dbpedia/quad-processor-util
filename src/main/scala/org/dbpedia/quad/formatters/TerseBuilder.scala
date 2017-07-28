@@ -1,16 +1,14 @@
 package org.dbpedia.quad.formatters
 
-import org.dbpedia.quad.formatters.UriPolicy._
 import org.dbpedia.quad.utils.TurtleUtils
+import org.dbpedia.quad.formatters.TripleBuilder._
 
 /**
  * Helps to build one triple/quad line in Turtle/Turtle-Quads/N-Triples/N-Quads format.
- * 
- * @param policies Mapping from URI positions (as defined in UriPolicy) to URI policy functions.
- * Must have five (UriPolicy.POSITIONS) elements. If null, URIs will not be modified.
+ *
 */
-class TerseBuilder(quads: Boolean, turtle: Boolean, policies: Array[Policy] = null) 
-extends UriTripleBuilder(policies) {
+class TerseBuilder(quads: Boolean, turtle: Boolean)
+extends UriTripleBuilder() {
   
   // Scala's StringBuilder doesn't have appendCodePoint
   private var sb = new java.lang.StringBuilder()
@@ -51,7 +49,7 @@ extends UriTripleBuilder(policies) {
   }
   
   override def end(context: String): Unit = {
-    if (quads)
+    if (quads && context != null)
       uri(context, CONTEXT)
 
     // use UNIX EOL. N-Triples and Turtle don't care:

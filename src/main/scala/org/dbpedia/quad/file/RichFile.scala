@@ -26,6 +26,7 @@ object RichFile {
  * Defines additional methods on Files, which are missing in the standard library.
  */
 class RichFile(file: File) extends FileLike[File] {
+  private var ignoreComp = false
   
   override def toString: String = file.toString
     
@@ -33,7 +34,12 @@ class RichFile(file: File) extends FileLike[File] {
     val name = file.getName
     // java.io.File.getName returns "" for "/" and ""
     // we emulate java.nio.file.Path.getFileName, which returns null for "/" but "" for ""
-    if (name.nonEmpty) name else if (file.isAbsolute) null else name
+    if (name.nonEmpty)
+      name
+    else if (file.isAbsolute)
+      null
+    else
+      name
   }
   
   override def exists: Boolean = file.getAbsoluteFile.exists
@@ -99,4 +105,8 @@ class RichFile(file: File) extends FileLike[File] {
   override def outputStream(append: Boolean = false): OutputStream = new FileOutputStream(file, append)
 
   override def getFile: File = file
+
+  def ignoreCompression(set: Boolean): Unit = {
+    ignoreComp = set
+  }
 }

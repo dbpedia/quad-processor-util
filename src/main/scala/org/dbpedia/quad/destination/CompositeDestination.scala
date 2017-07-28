@@ -1,6 +1,7 @@
 package org.dbpedia.quad.destination
 
 import org.dbpedia.quad.Quad
+import org.dbpedia.quad.formatters.Formatter
 
 /**
  * A destination that is composed of different child destinations.
@@ -26,4 +27,9 @@ class CompositeDestination(destinations : Destination *) extends Destination
      * Closes all child destinations.
      */
     override def close() = destinations.foreach(_.close())
+
+    /**
+      * provide information about the intended format (syntax) of the destination file
+      */
+    override val formatter: Formatter = destinations.head.formatter
 }

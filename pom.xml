@@ -13,6 +13,7 @@
         <java.version>1.8</java.version>
         <scala.version>2.11.4</scala.version>
         <scalatest.scala.version>2.11</scalatest.scala.version>
+        <scalatest.version>2.2.1</scalatest.version>
     </properties>
     <build>
         <pluginManagement>
@@ -43,6 +44,43 @@
                         </goals>
                     </execution>
                 </executions>
+
+                <configuration>
+                    <launchers>
+                        <launcher>
+                            <id>sort-quads</id>
+                            <mainClass>org.dbpedia.quad.sort.QuadSorter</mainClass>
+                            <args>
+                                <arg>quad-sorter.properties</arg>
+                            </args>
+                            <jvmArgs>
+                                <jvmArg>-server</jvmArg>
+                                <jvmArg>-Xmx8G</jvmArg>
+                                <jvmArg>-Xms4G</jvmArg>
+                                <jvmArg>-XX:+HeapDumpOnOutOfMemoryError</jvmArg>
+                                <jvmArg>-XX:+UseConcMarkSweepGC</jvmArg>
+                                <jvmArg>-XX:-UseGCOverheadLimit</jvmArg>
+                            </jvmArgs>
+                        </launcher>
+
+                        <launcher>
+                            <id>split-quad-file</id>
+                            <mainClass>org.dbpedia.quad.split.DumpSplitter</mainClass>
+                            <args>
+                                <arg>dump-splitter.properties</arg>
+                            </args>
+                            <jvmArgs>
+                                <jvmArg>-server</jvmArg>
+                                <jvmArg>-Xmx8G</jvmArg>
+                                <jvmArg>-Xms4G</jvmArg>
+                                <jvmArg>-XX:+HeapDumpOnOutOfMemoryError</jvmArg>
+                                <jvmArg>-XX:+UseConcMarkSweepGC</jvmArg>
+                                <jvmArg>-XX:-UseGCOverheadLimit</jvmArg>
+                            </jvmArgs>
+                        </launcher>
+
+                    </launchers>
+                </configuration>
             </plugin>
         </plugins>
     </build>
@@ -76,6 +114,20 @@
             <artifactId>KnowledgeGraphUtils</artifactId>
             <version>0.0.1-SNAPSHOT</version>
             <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.scalatest</groupId>
+            <artifactId>scalatest_2.11</artifactId>
+            <version>${scalatest.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.jena</groupId>
+            <artifactId>apache-jena-libs</artifactId>
+            <type>pom</type>
+            <version>3.1.0</version>
         </dependency>
     </dependencies>
 </project>

@@ -1,6 +1,9 @@
 package org.dbpedia.quad
 
 import java.net.URI
+
+import org.apache.jena.datatypes.{BaseDatatype, RDFDatatype, TypeMapper}
+import org.apache.jena.graph.{Node, NodeFactory}
 import org.dbpedia.quad.Quad._
 
 /**
@@ -32,10 +35,11 @@ class Quad(
   val value: String,
   val context: String,
   val datatype: String
-)
-extends Ordered[Quad]
-with Equals
-{
+)extends Ordered[Quad] with Equals with Comparable[Quad] {
+//extends org.apache.jena.sparql.core.Quad(
+//  if(context == null) DEFAULTGRAPH else NodeFactory.createURI(context),
+//  createJenaTriple(subject, predicate, value, datatype, language))
+
 
   // Validate input
   if (subject == null) throw new NullPointerException("subject")
@@ -59,7 +63,7 @@ with Equals
     context,
     datatype
   )
-  
+
   override def toString() = {
    "Quad("+
    "dataset="+dataset+","+
@@ -75,7 +79,7 @@ with Equals
   /**
    * sub classes that add new fields should override this method 
    */
-  def compare(that: Quad): Int = {
+  override def compare(that: Quad): Int = {
     var c = 0
     c = this.subject.compareTo(that.subject)
     if (c != 0) return c
@@ -137,6 +141,8 @@ with Equals
 
 object Quad
 {
+  val STRINGTYPE: RDFDatatype = TypeMapper.getInstance().getTypeByName("http://www.w3.org/2001/XMLSchema#string")
+  val DEFAULTGRAPH: Node = NodeFactory.createURI("urn:x-arq:DefaultGraph")
   /**
    * null-safe comparison. null is equal to null and less than any non-null string.
    */
@@ -151,6 +157,26 @@ object Quad
   private def safeHash(s: String): Int =
   {
     if (s == null) 0 else s.hashCode
+  }
+
+  def createJenaTriple(subj: String, pred: String, obj: String, dType: String, lang: String): org.apache.jena.graph.Triple ={
+    val subject = NodeFactory.createURI(subj)
+    val predicate = NodeFactory.createURI(pred)
+    val dataType = Option(TypeMapper.getInstance().getTypeByName(dType)) match{
+      case Some(dt) => dt
+      case None => {
+        val dt = new BaseDatatype(dType)
+        TypeMapper.getInstance().registerDatatype(dt)
+        dt
+      }
+    }
+    val objecct = if(dataType == null || dataType.getURI == STRINGTYPE.getURI)
+      NodeFactory.createURI(obj)
+    else if(lang != null)
+      NodeFactory.createLiteral(obj, lang)
+    else
+      NodeFactory.createLiteral(obj, dataType)
+    new org.apache.jena.graph.Triple(subject, predicate, objecct)
   }
 
   /**
@@ -264,5 +290,4 @@ object Quad
     val end = line.indexOf('>', start + 1) // TODO: turtle allows escaping > as \>
     if (end == -1) null else line.substring(start + 1, end)
   }
-  
 }

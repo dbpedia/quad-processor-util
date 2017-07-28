@@ -7,9 +7,13 @@ import org.dbpedia.quad.Quad
  */
 trait Formatter
 {
+  def setHeader(head: String): Unit
+
   def header: String
   
   def footer: String
-  
+
+  def setFooter(foot: String): Unit
+
   def render(quad: Quad): String
 }
