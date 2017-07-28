@@ -1,3 +1,5 @@
+package org.dbpedia.quad
+
 import java.io.File
 import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
 
