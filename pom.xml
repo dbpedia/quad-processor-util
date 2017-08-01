@@ -128,11 +128,11 @@
             <version>3.5</version>
         </dependency>
 
-        <dependency>
+<!--        <dependency>
             <groupId>org.aksw.sdw</groupId>
             <artifactId>KnowledgeGraphUtils</artifactId>
             <version>0.0.1-SNAPSHOT</version>
-        </dependency>
+        </dependency>-->
 
         <dependency>
             <groupId>org.scalatest</groupId>

@@ -1,3 +1,4 @@
+/*
 package org.dbpedia.quad
 
 import java.io.File
@@ -232,3 +233,4 @@ object SolrLoader {
     res
   }
 }
+*/
