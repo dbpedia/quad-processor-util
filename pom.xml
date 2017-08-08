@@ -83,6 +83,7 @@
                             <mainClass>org.dbpedia.quad.SolrLoader</mainClass>
                             <args>
                                 <arg>/media/bigone/25TB/www/downloads.dbpedia.org/2016-10/core-i18n/en</arg>
+                                <arg>en</arg>
                                 <arg>""</arg>
                                 <arg>"_en.ttl.bz2"</arg>
                                 <arg>http://vmdbpedia.informatik.uni-leipzig.de:10983/solr/dbpedia</arg>
