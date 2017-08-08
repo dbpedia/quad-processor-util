@@ -1,10 +1,9 @@
 
-package org.dbpedia.quad
+package org.dbpedia.quad.solr
 
 import java.io.File
 import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
 
-import aksw.org.sdw.kg.handler.solr.{KgSorlInputDocument, SolrHandler, SolrUriInputDocument}
 import org.dbpedia.quad.file.RichFile
 import org.dbpedia.quad.processing._
 import org.dbpedia.quad.utils.WikiUtil
@@ -152,7 +151,7 @@ object SolrLoader {
                   case `rdfType` => doc.addFieldData("typeUri", List(quad.value).asJava) //TODO add other types?
                   case `dctSubject` => subjects.append(quad.value)
                   case `vrank` =>
-                    doc.addFieldData("pagerank", quad.value)
+                    doc.addFieldData("pagerank", quad.value.toFloat)
                   case `owlSameAs` | `skosExact` => sameass.append(quad.value)
                   case `foafName` | `foafNick` | `dboSubTitle` | `dboOrigTitle` | `dboTag` | `dboTitle` | `dboAltTitle` => altlabels.append(quad.value)
                   case _ => if (quad.predicate.startsWith("http://dbpedia.org/ontology") && quad.predicate.toLowerCase().contains("name")) altlabels.append(quad.value)
