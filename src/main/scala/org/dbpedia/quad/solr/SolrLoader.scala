@@ -150,7 +150,7 @@ object SolrLoader {
                   }
                   case `rdfType` => doc.addFieldData("typeUri", List(quad.value).asJava) //TODO add other types?
                   case `dctSubject` => subjects.append(quad.value)
-                  case `vrank` =>
+                  case `vrank` => if(doc.getSolrInputDocument.getField("pagerank") == null)
                     doc.addFieldData("pagerank", quad.value.toFloat)
                   case `owlSameAs` | `skosExact` => sameass.append(quad.value)
                   case `foafName` | `foafNick` | `dboSubTitle` | `dboOrigTitle` | `dboTag` | `dboTitle` | `dboAltTitle` => altlabels.append(quad.value)
@@ -189,7 +189,8 @@ object SolrLoader {
 
                 Await.result(solrCommitPromise, Duration.apply(2l, TimeUnit.MINUTES))
                 //wait if the last commit to solr has not finished yet (quiet unlikely)
-                while(! solrCommitPromise.value.get.get) {
+                var trys = 0
+                while(! solrCommitPromise.value.get.get && trys < 5) {
                   System.out.println("Retrying " + nonCommittedDocs + " documents into Solr.")
                   solrCommitPromise = commitDocQueue(lastQueue.toList).recover{
                     case t: Throwable => {
@@ -198,6 +199,7 @@ object SolrLoader {
                     }
                   }
                   Await.result(solrCommitPromise, Duration.apply(2l, TimeUnit.MINUTES))
+                  trys += 1
                 }
 
                 System.out.println("Importing " + nonCommittedDocs + " documents into Solr.")
