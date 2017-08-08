@@ -1,4 +1,4 @@
-/*
+
 package org.dbpedia.quad
 
 import java.io.File
@@ -37,6 +37,7 @@ object SolrLoader {
   private val dboOrigTitle = "http://dbpedia.org/ontology/originalTitle"
   private val dboSubTitle = "http://dbpedia.org/ontology/subtitle"
   private val skosExact = "http://www.w3.org/2004/02/skos/core#exactMatch"
+  private val vrank = "http://purl.org/voc/vrank#rankValue"
 
   private val disambiguations: concurrent.Map[String, ListBuffer[String]] = new ConcurrentHashMap[String, ListBuffer[String]]().asScala
   private val redirects: concurrent.Map[String, ListBuffer[String]] = new ConcurrentHashMap[String, ListBuffer[String]]().asScala
@@ -150,6 +151,8 @@ object SolrLoader {
                   }
                   case `rdfType` => doc.addFieldData("typeUri", List(quad.value).asJava) //TODO add other types?
                   case `dctSubject` => subjects.append(quad.value)
+                  case `vrank` =>
+                    doc.addFieldData("pagerank", quad.value)
                   case `owlSameAs` | `skosExact` => sameass.append(quad.value)
                   case `foafName` | `foafNick` | `dboSubTitle` | `dboOrigTitle` | `dboTag` | `dboTitle` | `dboAltTitle` => altlabels.append(quad.value)
                   case _ => if (quad.predicate.startsWith("http://dbpedia.org/ontology") && quad.predicate.toLowerCase().contains("name")) altlabels.append(quad.value)
@@ -190,14 +193,20 @@ object SolrLoader {
                 while(! solrCommitPromise.value.get.get) {
                   System.out.println("Retrying " + nonCommittedDocs + " documents into Solr.")
                   solrCommitPromise = commitDocQueue(lastQueue.toList).recover{
-                    case t: Throwable => false
+                    case t: Throwable => {
+                      t.printStackTrace()
+                      false
+                    }
                   }
                   Await.result(solrCommitPromise, Duration.apply(2l, TimeUnit.MINUTES))
                 }
 
                 System.out.println("Importing " + nonCommittedDocs + " documents into Solr.")
                 solrCommitPromise = commitDocQueue(lastQueue.toList).recover{
-                  case t: Throwable => false
+                  case t: Throwable => {
+                    t.printStackTrace()
+                    false
+                  }
                 }
                 //clear queue
                 lastQueue = docQueue
@@ -233,4 +242,4 @@ object SolrLoader {
     res
   }
 }
-*/
+

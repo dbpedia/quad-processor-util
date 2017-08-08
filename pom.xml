@@ -87,7 +87,7 @@
                                 <arg>"_en.ttl.bz2"</arg>
                                 <arg>http://vmdbpedia.informatik.uni-leipzig.de:10983/solr/dbpedia</arg>
                                 <arg>page_ids_sorted</arg>
-                                <arg>short_abstracts_sorted,article_categories_sorted,interlanguage_links_sorted,mappingbased_literals_sorted,infobox_properties_sorted,labels_sorted,instance_types_sorted</arg>
+                                <arg>pagerank_sorted,short_abstracts_sorted,article_categories_sorted,interlanguage_links_sorted,mappingbased_literals_sorted,infobox_properties_sorted,labels_sorted,instance_types_sorted</arg>
                             </args>
                             <jvmArgs>
                                 <jvmArg>-server</jvmArg>
@@ -128,11 +128,11 @@
             <version>3.5</version>
         </dependency>
 
-<!--        <dependency>
+        <dependency>
             <groupId>org.aksw.sdw</groupId>
             <artifactId>KnowledgeGraphUtils</artifactId>
             <version>0.0.1-SNAPSHOT</version>
-        </dependency>-->
+        </dependency>
 
         <dependency>
             <groupId>org.scalatest</groupId>
