@@ -36,11 +36,15 @@ public class SolrUriInputDocument implements KgSorlInputDocument {
 	 * @param fieldData
 	 */
 	public void addFieldData(final String fieldName, final Object fieldData) {
+        addFieldData(fieldName, fieldData, 1f);
+	}
+
+	public void addFieldData(final String fieldName, final Object fieldData, final float boost) {
 		if (null == fieldName || null == fieldData) {
 			return;
 		}
-		
-		this.solrDocument.addField(fieldName, fieldData);
+
+		this.solrDocument.addField(fieldName, fieldData, boost);
 	}
 	
 	/**
@@ -49,13 +53,25 @@ public class SolrUriInputDocument implements KgSorlInputDocument {
 	 * @param fieldName
 	 * @param fieldDataCollection
 	 */
-	public void addFieldData(final String fieldName, final Collection<Object> fieldDataCollection) {
+    public void addFieldData(final String fieldName, final Collection<Object> fieldDataCollection) {
+        addFieldData(fieldName, fieldDataCollection, 1f);
+    }
+
+	public void addFieldData(final String fieldName, final Collection<Object> fieldDataCollection, final float boost) {
 		if (null == fieldName || null == fieldDataCollection || fieldDataCollection.isEmpty()) {
 			return;
 		}
-		
+
+		//for multivalued fields the boost should only be applied once, since lucene combines (by * or +) the boosts of each value into one
+        // see e.g. here: http://lucene.472066.n3.nabble.com/Index-time-Boosting-td474182.html
+		boolean boostApplied = false;
 		for (Object fieldData : fieldDataCollection) {
-			this.solrDocument.addField(fieldName, fieldData);
+		    if(boostApplied)
+                this.solrDocument.addField(fieldName, fieldData);
+		    else {
+                this.solrDocument.addField(fieldName, fieldData, boost);
+                boostApplied = true;
+            }
 		}
 	}
 	
