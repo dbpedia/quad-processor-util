@@ -162,15 +162,15 @@ object SolrLoader {
               doc.addFieldData("title", title)
 
               doc.addFieldData("altLabel", altlabels.distinct.map(removeUnwanted).toList.asJava, altlabels.distinct.size.toFloat)
-              doc.addFieldData("sameAsUri", sameass.distinct.toList.asJava, sameass.distinct.size.toFloat)
+              doc.addFieldData("sameAsUri", sameass.distinct.toList.asJava)
               doc.addFieldData("sameAsText", sameass.distinct.map(x => WikiUtil.wikiDecode(x.substring(x.lastIndexOf("/") + 1))).toList.asJava, sameass.distinct.size.toFloat)
-              doc.addFieldData("subjectsUri", subjects.distinct.toList.asJava, subjects.distinct.size.toFloat)
+              doc.addFieldData("subjectsUri", subjects.distinct.toList.asJava)
               doc.addFieldData("subjectsText", subjects.distinct.map(x => WikiUtil.wikiDecode(x.substring(x.lastIndexOf("/") + 1))).toList.asJava, subjects.distinct.size.toFloat)
 
               redirects.get(doc.getId) match {
                 case Some(x) => {
                   doc.addFieldData("redirectsText", x.map(y => WikiUtil.wikiDecode(y.substring("http://dbpedia.org/resource/".length))).asJava, x.size.toFloat)
-                  doc.addFieldData("redirectsUri", x.asJava, x.size.toFloat)
+                  doc.addFieldData("redirectsUri", x.asJava)
                 }
                 case None =>
               }
@@ -178,7 +178,7 @@ object SolrLoader {
               disambiguations.get(doc.getId) match {
                 case Some(x) => {
                   doc.addFieldData("disambiguationsText", x.map(y => WikiUtil.wikiDecode(y.substring("http://dbpedia.org/resource/".length))).asJava, x.size.toFloat)
-                  doc.addFieldData("disambiguationsUri", x.map(y => y).asJava, x.size.toFloat)
+                  doc.addFieldData("disambiguationsUri", x.map(y => y).asJava)
                 }
                 case None =>
               }
