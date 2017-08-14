@@ -1,9 +1,12 @@
 
 package org.dbpedia.quad.solr
 
-import java.io.File
+import java.io.{File, StringReader}
 import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
 
+import org.apache.lucene.analysis.Tokenizer
+import org.apache.lucene.analysis.standard.{StandardTokenizer, StandardTokenizerFactory}
+import org.apache.lucene.analysis.tokenattributes.CharTermAttribute
 import org.dbpedia.quad.file.RichFile
 import org.dbpedia.quad.processing._
 import org.dbpedia.quad.utils.WikiUtil
@@ -160,16 +163,19 @@ object SolrLoader {
 
               doc.addFieldData("id", doc.getId)
               doc.addFieldData("title", title)
-
-              doc.addFieldData("altLabel", altlabels.distinct.map(removeUnwanted).toList.asJava)
+              var entries : List[String]  = altlabels.distinct.map(removeUnwanted).toList
+              doc.addFieldData("altLabel", entries.asJava, Math.sqrt(countTokens(entries)).toFloat)
               doc.addFieldData("sameAsUri", sameass.distinct.toList.asJava)
-              doc.addFieldData("sameAsText", sameass.distinct.map(x => WikiUtil.wikiDecode(x.substring(x.lastIndexOf("/") + 1))).toList.asJava)
+              entries = sameass.distinct.map(x => WikiUtil.wikiDecode(x.substring(x.lastIndexOf("/") + 1))).toList
+              doc.addFieldData("sameAsText", entries.asJava, Math.sqrt(countTokens(entries)).toFloat)
               doc.addFieldData("subjectsUri", subjects.distinct.toList.asJava)
-              doc.addFieldData("subjectsText", subjects.distinct.map(x => WikiUtil.wikiDecode(x.substring(x.lastIndexOf("/") + 1))).toList.asJava)
+              entries = subjects.distinct.map(x => WikiUtil.wikiDecode(x.substring(x.lastIndexOf("/") + 1))).toList
+              doc.addFieldData("subjectsText", entries.asJava, Math.sqrt(countTokens(entries)).toFloat)
 
               redirects.get(doc.getId) match {
                 case Some(x) => {
-                  doc.addFieldData("redirectsText", x.map(y => WikiUtil.wikiDecode(y.substring("http://dbpedia.org/resource/".length))).asJava)
+                  entries = x.map(y => WikiUtil.wikiDecode(y.substring("http://dbpedia.org/resource/".length))).toList
+                  doc.addFieldData("redirectsText", entries.asJava, Math.sqrt(countTokens(entries)).toFloat)
                   doc.addFieldData("redirectsUri", x.asJava)
                 }
                 case None =>
@@ -177,7 +183,8 @@ object SolrLoader {
 
               disambiguations.get(doc.getId) match {
                 case Some(x) => {
-                  doc.addFieldData("disambiguationsText", x.map(y => WikiUtil.wikiDecode(y.substring("http://dbpedia.org/resource/".length))).asJava)
+                  entries = x.map(y => WikiUtil.wikiDecode(y.substring("http://dbpedia.org/resource/".length))).toList
+                  doc.addFieldData("disambiguationsText", entries.asJava, Math.sqrt(countTokens(entries)).toFloat)
                   doc.addFieldData("disambiguationsUri", x.map(y => y).asJava)
                 }
                 case None =>
@@ -241,6 +248,22 @@ object SolrLoader {
     for(replace <- replacePatterns)
       res = res.replaceAll(replace._1, "")
     res
+  }
+
+  private val tokenizerFactory = new StandardTokenizerFactory(Map[String, String]().asJava)
+  def countTokens(entries: List[String]): Int ={
+    var tokens = new ListBuffer[String]()
+
+    for(entry <- entries){
+      val tokenizer: Tokenizer = tokenizerFactory.create()
+      tokenizer.setReader(new StringReader(entry))
+      tokenizer.reset()
+      while (tokenizer.incrementToken()){
+        tokens += tokenizer.getAttribute(classOf[CharTermAttribute]).toString
+      }
+      tokenizer.close()
+    }
+    tokens.size
   }
 }
 
