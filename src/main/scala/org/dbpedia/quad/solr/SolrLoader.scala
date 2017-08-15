@@ -164,18 +164,21 @@ object SolrLoader {
               doc.addFieldData("id", doc.getId)
               doc.addFieldData("title", title)
               var entries : List[String]  = altlabels.distinct.map(removeUnwanted).toList
-              doc.addFieldData("altLabel", entries.map(x => addPayload("disambiguationsText", x)).asJava)
+              doc.addFieldData("altLabel_phrase", entries.map(x => addPayload("altLabel_phrase", x)).asJava)
+              doc.addFieldData("altLabel", entries.asJava)
               doc.addFieldData("sameAsUri", sameass.distinct.toList.asJava)
               entries = sameass.distinct.map(x => WikiUtil.wikiDecode(x.substring(x.lastIndexOf("/") + 1))).toList
-              doc.addFieldData("sameAsText", entries.map(x => addPayload("disambiguationsText", x)).asJava)
+              doc.addFieldData("sameAsText_phrase", entries.map(x => addPayload("sameAsText_phrase", x)).asJava)
+              doc.addFieldData("sameAsText", entries.asJava)
               doc.addFieldData("subjectsUri", subjects.distinct.toList.asJava)
               entries = subjects.distinct.map(x => WikiUtil.wikiDecode(x.substring(x.lastIndexOf("/") + 1))).toList
-              doc.addFieldData("subjectsText", entries.map(x => addPayload("disambiguationsText", x)).asJava)
+              doc.addFieldData("subjectsText", entries.asJava)
 
               redirects.get(doc.getId) match {
                 case Some(x) => {
                   entries = x.map(y => WikiUtil.wikiDecode(y.substring("http://dbpedia.org/resource/".length))).toList
-                  doc.addFieldData("redirectsText", entries.map(x => addPayload("disambiguationsText", x)).asJava)
+                  doc.addFieldData("redirectsText_phrase", entries.map(x => addPayload("redirectsText_phrase", x)).asJava)
+                  doc.addFieldData("redirectsText", entries.asJava)
                   doc.addFieldData("redirectsUri", x.asJava)
                 }
                 case None =>
@@ -184,7 +187,8 @@ object SolrLoader {
               disambiguations.get(doc.getId) match {
                 case Some(x) => {
                   entries = x.map(y => WikiUtil.wikiDecode(y.substring("http://dbpedia.org/resource/".length))).toList
-                  doc.addFieldData("disambiguationsText", entries.map(x => addPayload("disambiguationsText", x)).asJava)
+                  doc.addFieldData("disambiguationsText_phrase", entries.map(x => addPayload("disambiguationsText_phrase", x)).asJava)
+                  doc.addFieldData("disambiguationsText", entries.asJava)
                   doc.addFieldData("disambiguationsUri", x.map(y => y).asJava)
                 }
                 case None =>
