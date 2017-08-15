@@ -4,6 +4,7 @@ import org.apache.lucene.analysis.payloads.PayloadHelper;
 import org.apache.lucene.search.similarities.BM25Similarity;
 import org.apache.lucene.search.similarities.Similarity;
 import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.SmallFloat;
 import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.search.similarities.BM25SimilarityFactory;
 
@@ -36,11 +37,13 @@ class PayloadBM25Similarity extends BM25Similarity {
     @Override
     public float scorePayload(int doc, int start, int end, BytesRef payload) {
         if (payload == null) return 1.0F;
-        return PayloadHelper.decodeFloat(payload.bytes, payload.offset);
+        //now we divide
+        return new Double(1d / Math.sqrt(PayloadHelper.decodeFloat(payload.bytes, payload.offset))).floatValue();
     }
 
     @Override
     protected byte encodeNormValue(float boost, int fieldLength) {
-        return super.encodeNormValue(boost, fieldLength);
+        //we completely ignore field length (this is values in by payloads!)
+        return SmallFloat.floatToByte315(boost);
     }
 }
