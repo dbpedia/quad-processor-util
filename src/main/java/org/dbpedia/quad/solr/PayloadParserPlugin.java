@@ -4,12 +4,14 @@ import org.apache.lucene.index.Term;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.payloads.AveragePayloadFunction;
 import org.apache.lucene.search.payloads.PayloadTermQuery;
-import org.apache.solr.common.params.CommonParams;
 import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.schema.SchemaField;
-import org.apache.solr.search.*;
+import org.apache.solr.search.ExtendedDismaxQParser;
+import org.apache.solr.search.QParser;
+import org.apache.solr.search.QParserPlugin;
+import org.apache.solr.search.SyntaxError;
 
 /**
  * Created by chile on 15.08.17.
@@ -43,18 +45,7 @@ class PayloadQParser extends ExtendedDismaxQParser {
     // below.
     @Override
     public Query parse() throws SyntaxError {
-        String qstr = getString();
-        if (qstr == null || qstr.length() == 0) return null;
-
-        String defaultField = getParam(CommonParams.DF);
-        if (defaultField == null) {
-            defaultField = getReq().getSchema().getDefaultSearchFieldName();
-        }
-        pqParser = new PayloadQueryParser(this, defaultField);
-
-        pqParser.setDefaultOperator(QueryParsing.getQueryParserDefaultOperator(getReq().getSchema(), getParam(QueryParsing.OP)));
-
-        return pqParser.parse(qstr);
+        return super.parse();
     }
 
     @Override
@@ -63,6 +54,10 @@ class PayloadQParser extends ExtendedDismaxQParser {
                 new String[] {pqParser.getDefaultField()};
     }
 
+    @Override
+    protected ExtendedSolrQueryParser createEdismaxQueryParser(QParser qParser, String field) {
+        return new PayloadQueryParser(qParser, field);
+    }
 }
 
 
