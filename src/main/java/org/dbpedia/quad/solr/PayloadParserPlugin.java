@@ -7,13 +7,9 @@ import org.apache.lucene.search.payloads.PayloadTermQuery;
 import org.apache.solr.common.params.CommonParams;
 import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.common.util.NamedList;
-import org.apache.solr.parser.QueryParser;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.schema.SchemaField;
-import org.apache.solr.search.QParser;
-import org.apache.solr.search.QParserPlugin;
-import org.apache.solr.search.QueryParsing;
-import org.apache.solr.search.SyntaxError;
+import org.apache.solr.search.*;
 
 /**
  * Created by chile on 15.08.17.
@@ -31,7 +27,7 @@ public class PayloadParserPlugin extends QParserPlugin {
     }
 }
 
-class PayloadQParser extends QParser {
+class PayloadQParser extends ExtendedDismaxQParser {
     PayloadQueryParser pqParser;
 
     public PayloadQParser(String qstr, SolrParams localParams, SolrParams params, SolrQueryRequest req) {
@@ -79,9 +75,9 @@ class PayloadQParser extends QParser {
 // here is that we're only evaluating payloads for
 // queries that can resolve to combinations of single word
 // fielded queries.
-class PayloadQueryParser extends QueryParser {
+class PayloadQueryParser extends ExtendedDismaxQParser.ExtendedSolrQueryParser {
     PayloadQueryParser(QParser parser, String defaultField) {
-        super(parser.getReq().getCore().getSolrConfig().luceneMatchVersion, defaultField, parser);
+        super(parser, defaultField);
     }
 
     @Override
