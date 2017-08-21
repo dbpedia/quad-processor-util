@@ -177,9 +177,13 @@ object SolrLoader {
               redirects.get(doc.getId) match {
                 case Some(x) => {
                   entries = x.map(y => WikiUtil.wikiDecode(y.substring("http://dbpedia.org/resource/".length))).toList
-                  doc.addFieldData("redirectsText_phrase", entries.map(x => addPayload("redirectsText_phrase", x)).asJava)
+                  //doc.addFieldData("redirectsText_phrase", entries.map(x => addPayload("redirectsText_phrase", x)).asJava)
                   doc.addFieldData("redirectsText", entries.asJava)
                   doc.addFieldData("redirectsUri", x.asJava)
+
+                  for(i <- entries.indices)
+                    doc.addFieldData("redirectsText_" + i, entries(i))
+
                 }
                 case None =>
               }
@@ -256,7 +260,7 @@ object SolrLoader {
 
   private val analyzer = new PayloadAnalyzer()
   def addPayload(field: String, entry: String): String ={
-    var tokens = new ListBuffer[String]()
+/*    var tokens = new ListBuffer[String]()
     val ts: TokenStream = analyzer.tokenStream(field, new StringReader(entry))
     ts.reset()
     while (ts.incrementToken()){
@@ -266,7 +270,8 @@ object SolrLoader {
     if(tokens.nonEmpty)
       tokens.map(x => x + "|" + tokens.size).toList.reduceLeft((x,y) => x + " " + y)
     else
-      ""
+      ""*/
+    entry
   }
 }
 
