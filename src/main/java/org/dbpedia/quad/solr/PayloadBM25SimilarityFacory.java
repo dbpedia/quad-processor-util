@@ -1,5 +1,6 @@
 package org.dbpedia.quad.solr;
 
+import org.apache.lucene.analysis.payloads.PayloadHelper;
 import org.apache.lucene.search.similarities.BM25Similarity;
 import org.apache.lucene.search.similarities.Similarity;
 import org.apache.lucene.util.BytesRef;
@@ -36,9 +37,7 @@ class PayloadBM25Similarity extends BM25Similarity {
     @Override
     public float scorePayload(int doc, int start, int end, BytesRef payload) {
         if (payload == null) return 1.0F;
-        throw new RuntimeException("test");
-        //now we divide
-        //return new Double(1d / Math.sqrt(PayloadHelper.decodeFloat(payload.bytes, payload.offset))).floatValue();
+        return new Double(1d / Math.sqrt(PayloadHelper.decodeFloat(payload.bytes, payload.offset))).floatValue();
     }
 
     @Override

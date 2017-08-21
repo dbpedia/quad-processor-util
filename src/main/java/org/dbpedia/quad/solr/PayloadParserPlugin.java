@@ -1,9 +1,6 @@
 package org.dbpedia.quad.solr;
 
-import org.apache.lucene.index.Term;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.payloads.AveragePayloadFunction;
-import org.apache.lucene.search.payloads.PayloadTermQuery;
 import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.request.SolrQueryRequest;
@@ -88,8 +85,8 @@ class PayloadQueryParser extends ExtendedDismaxQParser.ExtendedSolrQueryParser {
         //if(field != null && !field.trim().isEmpty())
         //    throw new RuntimeException(field);
         //if (field.equalsIgnoreCase("redirectsText_phrase")) {
-            return new PayloadTermQuery(new Term(field, queryText), new AveragePayloadFunction(), false);
+            //return new PayloadTermQuery(new Term(field, queryText), new AveragePayloadFunction(), true);
         //}
-        //return super.getFieldQuery(field, queryText, quoted);
+        return super.getFieldQuery(field, queryText, quoted);
     }
 }
