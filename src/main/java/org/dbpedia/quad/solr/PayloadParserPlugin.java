@@ -81,10 +81,10 @@ class PayloadQueryParser extends ExtendedDismaxQParser.ExtendedSolrQueryParser {
 
         //if(sf != null)
         //    throw new RuntimeException(sf.getType().getTypeName());
-        if (field.equalsIgnoreCase("redirectsText_phrase")) {
-            throw new RuntimeException(field);
+        throw new RuntimeException(field);
+        //if (field.equalsIgnoreCase("redirectsText_phrase")) {
             //return new PayloadTermQuery(new Term(field, queryText), new AveragePayloadFunction(), false);
-        }
-        return super.getFieldQuery(field, queryText, quoted);
+        //}
+        //return super.getFieldQuery(field, queryText, quoted);
     }
 }
