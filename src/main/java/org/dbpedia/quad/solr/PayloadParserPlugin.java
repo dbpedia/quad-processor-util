@@ -80,11 +80,12 @@ class PayloadQueryParser extends ExtendedDismaxQParser.ExtendedSolrQueryParser {
         // One could easily parameterize this in the config files to
         // avoid hard-coding the values.
 
-        throw new RuntimeException(sf.getType().getTypeName());
+        if(sf != null)
+            throw new RuntimeException(sf.getType().getTypeName());
 /*        if (sf != null && sf.getType().getTypeName().equalsIgnoreCase("payload_text")) {
 
             //return new PayloadTermQuery(new Term(field, queryText), new AveragePayloadFunction(), false);
-        }
-        return super.getFieldQuery(field, queryText, quoted);*/
+        }*/
+        return super.getFieldQuery(field, queryText, quoted);
     }
 }
