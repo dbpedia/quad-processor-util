@@ -1,10 +1,12 @@
 package org.dbpedia.quad.solr;
 
+import org.apache.lucene.index.Term;
 import org.apache.lucene.search.Query;
+import org.apache.lucene.search.payloads.AveragePayloadFunction;
+import org.apache.lucene.search.payloads.PayloadTermQuery;
 import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.request.SolrQueryRequest;
-import org.apache.solr.schema.SchemaField;
 import org.apache.solr.search.ExtendedDismaxQParser;
 import org.apache.solr.search.QParser;
 import org.apache.solr.search.QParserPlugin;
@@ -74,18 +76,18 @@ class PayloadQueryParser extends ExtendedDismaxQParser.ExtendedSolrQueryParser {
 
     @Override
     protected Query getFieldQuery(String field, String queryText, boolean quoted) throws SyntaxError {
-        SchemaField sf = this.schema.getFieldOrNull(field);
+        //SchemaField sf = this.schema.getFieldOrNull(field);
         // Note that this will work for any field defined with the
         // <fieldType> of "payloads", not just the field "payloads".
         // One could easily parameterize this in the config files to
         // avoid hard-coding the values.
 
-        if(sf != null)
-            throw new RuntimeException(sf.getType().getTypeName());
-/*        if (sf != null && sf.getType().getTypeName().equalsIgnoreCase("payload_text")) {
+        //if(sf != null)
+        //    throw new RuntimeException(sf.getType().getTypeName());
+        if (field.equalsIgnoreCase("redirectsText_phrase")) {
 
-            //return new PayloadTermQuery(new Term(field, queryText), new AveragePayloadFunction(), false);
-        }*/
+            return new PayloadTermQuery(new Term(field, queryText), new AveragePayloadFunction(), false);
+        }
         return super.getFieldQuery(field, queryText, quoted);
     }
 }
