@@ -1,6 +1,10 @@
 package org.dbpedia.quad.solr;
 
+import org.apache.lucene.index.Term;
 import org.apache.lucene.search.Query;
+import org.apache.lucene.search.payloads.AveragePayloadFunction;
+import org.apache.lucene.search.payloads.PayloadScoreQuery;
+import org.apache.lucene.search.spans.SpanTermQuery;
 import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.request.SolrQueryRequest;
@@ -75,13 +79,13 @@ class PayloadQueryParser extends ExtendedDismaxQParser.ExtendedSolrQueryParser {
     @Override
     protected Query getFieldQuery(String field, String queryText, boolean quoted) throws SyntaxError {
         SchemaField sf = this.schema.getFieldOrNull(field);
-        // Note that this will work for any field defined with the
-        // <fieldType> of "payloads", not just the field "payloads".
-        // One could easily parameterize this in the config files to
-        // avoid hard-coding the values.
-        if (sf != null && sf.getType().getTypeName().equalsIgnoreCase("payloads")) {
-            throw new RuntimeException("miep miep");
-            //return new PayloadTermQuery(new Term(field, queryText), new AveragePayloadFunction(), true);
+
+        if (sf != null) {
+
+            final String fieldTypeName = sf.getType().getTypeName().toLowerCase();
+            if(fieldTypeName.contains("payload_text")) {
+                return new PayloadScoreQuery(new SpanTermQuery(new Term(field, queryText)), new AveragePayloadFunction());
+            }
         }
         return super.getFieldQuery(field, queryText, quoted);
     }
