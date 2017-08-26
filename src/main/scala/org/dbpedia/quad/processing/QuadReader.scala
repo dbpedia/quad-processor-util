@@ -141,7 +141,7 @@ class QuadReader(log: FileLike[File] = null, reportInterval: Int = 100000, pream
       val futureQuads = for (worker <- workers)
         yield worker.work(subj)
 
-      waitAll(futureQuads.map(x => x.future))
+      waitAll(futureQuads)
       val zw = futureQuads.map(x => x.future.value).map(y => y.getOrElse(Try{Seq()}).getOrElse(Seq())).flatten  //TODO make this more readable and insert recovery!
       proc(zw ++ quads)
     }
@@ -171,7 +171,7 @@ class QuadReader(log: FileLike[File] = null, reportInterval: Int = 100000, pream
             return true
         }
       }
-      PromisedWork.waitAll(Set(next._1.future))
+      PromisedWork.waitAll(List(next._1.future))
       val headv = head._1.future.value.get match{
         case Success(s) => if(s.nonEmpty)
           s.head

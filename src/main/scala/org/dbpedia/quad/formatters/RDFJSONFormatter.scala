@@ -6,6 +6,8 @@ package org.dbpedia.quad.formatters
 class RDFJSONFormatter()
   extends TripleFormatter(() => new RDFJSONBuilder()) {
 
+  override val serialization: String = "rdf-json"
+
   override def header = ""
 
   override def footer = ""

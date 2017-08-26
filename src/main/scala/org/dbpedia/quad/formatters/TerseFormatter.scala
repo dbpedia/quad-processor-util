@@ -11,6 +11,8 @@ extends TripleFormatter(() => new TerseBuilder(quads, turtle))
   var head = "# started {timestamp} \n"
   var foot = "# completed {timestamp} \n"
 
+  override val serialization: String = (if(turtle) "turtle-" else "n-") + (if(quads) "quads" else "triples")
+
   override def header = foot.replace("{timestamp}", StringUtils.formatCurrentTimestamp)
   
   override def footer = head.replace("{timestamp}", StringUtils.formatCurrentTimestamp)

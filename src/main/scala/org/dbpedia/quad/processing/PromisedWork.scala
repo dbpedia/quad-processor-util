@@ -13,7 +13,7 @@ import scala.util.Try
   */
 class PromisedWork[T, R](factory: => Worker[T, R], val availThreads: Int = defaultThreads , val queueLength: Int = defaultThreads)
 {
-  def getFactory = factory
+  def getFactory: Worker[T, R] = factory
 
   private val workers = for(i <- 0 until availThreads) yield i -> factory
   private val c = new AtomicInteger(0)
@@ -34,6 +34,11 @@ class PromisedWork[T, R](factory: => Worker[T, R], val availThreads: Int = defau
       worker.process(value)(PromisedWork.executionContext)
     }
   }
+
+  def work(values: Seq[T]): Seq[Promise[R]] ={
+    for(value <- values) yield
+      work(value)
+  }
 }
 
 object PromisedWork{
@@ -44,13 +49,15 @@ object PromisedWork{
     defaultThreads, defaultThreads, 10000, TimeUnit.MILLISECONDS, 100
   ))
 
-
   private def lift[T](futures: Traversable[Future[T]]) ={
     futures.map(Await.result(_, Duration.Inf))
     futures
   }
 
-  def waitAll[T](futures: Traversable[Future[T]]) =
+  def waitAll[T](promises: Seq[Promise[T]]): Future[Traversable[T]] =
+    waitAll(promises.map(z => z.future).toList)
+
+  def waitAll[T](futures: List[Future[T]]): Future[Traversable[T]] =
     Future.sequence(lift(futures)) // having neutralized exception completions through the lifting, .sequence can now be used
 
   def workInParallel[T, R](workers: Traversable[PromisedWork[T, R]], args: Seq[T]): Traversable[Promise[R]] = {

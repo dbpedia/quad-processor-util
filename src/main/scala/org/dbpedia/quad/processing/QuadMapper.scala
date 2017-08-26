@@ -41,7 +41,7 @@ class QuadMapper(log: FileLike[File] = null, reportInterval: Int = 100000, pream
    */
   def mapQuads(language: String, inFile: FileLike[_], outFile: FileLike[_], required: Boolean, quads: Boolean, turtle: Boolean)(map: Quad => Traversable[Quad]): Boolean = {
     err.println(language+": writing "+outFile+" ...")
-    val destination = new WriterDestination(() => writer(outFile), new QuadMapperFormatter())
+    val destination = new WriterDestination(() => writer(outFile), new TerseFormatter(quads, turtle))
     mapQuads(language, inFile, destination, required, true)(map)
   }
 
@@ -98,32 +98,5 @@ class QuadMapper(log: FileLike[File] = null, reportInterval: Int = 100000, pream
     err.println(language+": mapped "+mapCount+" quads")
 
     ret
-  }
-}
-
-class QuadMapperFormatter(quad: Boolean = true, turtle: Boolean = true) extends TerseFormatter(quad, turtle) {
-  def this(formatter: TerseFormatter){
-    this(formatter.quads, formatter.turtle)
-  }
-  private var contextAdditions = Map[String, String]()
-
-  def addContextAddition(paramName: String, paramValue: String): Unit = synchronized {
-    val param = paramName.replaceAll("\\s", "").toLowerCase()
-    contextAdditions += ( param -> UriUtils.encodeUriComponent(paramValue))
-  }
-
-  override def render(quad: Quad): String = synchronized {
-    var context = Option(quad.context) match{
-      case Some(c) if c.trim.nonEmpty => c.trim
-      case None => null
-      case _ => null
-    }
-    for(add <- contextAdditions if context != null)
-      if(context.indexOf("#") > 0)
-        context += "&" + add._1 + "=" + add._2
-      else
-        context += "#" + add._1 + "=" + add._2
-    val value = TurtleUtils.unescapeTurtle(quad.value)  //TODO unescaping turtle escapes
-    super.render(quad.copy(value=value,context=context))
   }
 }

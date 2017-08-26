@@ -81,15 +81,17 @@ object IOUtils {
     * @param files
     * @param outFile
     */
-  def concatFile(files: List[FileLike[_]], outFile: FileLike[_]): Int = {
+  def concatFile(files: Seq[FileLike[_]], outFile: FileLike[_]): Boolean = {
     var command = "cat "
     for(i <- files.indices)
       command += files(i).getFile.getAbsolutePath + " "
     command += "> " + outFile.getFile.getAbsolutePath
     val camArray = collection.JavaConversions.seqAsJavaList(List( "/bin/bash", "-c", command ))
-    new ProcessBuilder(camArray).start().waitFor()
+    val pb = new ProcessBuilder(camArray)
+    val ret = Integer.valueOf(pb.start().waitFor())
+    ret == 0
   }
-  
+
   /**
    * open output stream, wrap in zipper stream if file suffix indicates compressed file,
    * wrap in writer.

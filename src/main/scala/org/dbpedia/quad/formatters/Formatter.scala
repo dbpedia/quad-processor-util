@@ -16,4 +16,6 @@ trait Formatter
   def setFooter(foot: String): Unit
 
   def render(quad: Quad): String
+
+  def serialization: String
 }

@@ -15,6 +15,7 @@ extends Destination
 {
   private var writer: Writer = null
   private var countQuads = 0
+  private var tag: String = ""
   
   override def open() = {
     if(writer == null) //to prevent errors when called twice
@@ -46,4 +47,7 @@ extends Destination
 
   def setHeader(head: String): Unit = formatter.setHeader(head)
   def setFooter(foot: String): Unit = formatter.setFooter(foot)
+
+  def getTag: String = this.tag
+  def setTag(tag: String): Unit = this.tag = tag
 }

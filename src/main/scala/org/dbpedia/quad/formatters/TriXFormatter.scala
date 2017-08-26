@@ -9,6 +9,8 @@ package org.dbpedia.quad.formatters
 class TriXFormatter(quads: Boolean)
 extends TripleFormatter(() => new TriXBuilder(quads))
 {
+  override val serialization: String = "trix-" + (if(quads) "quads" else "triples")
+
   override def header = "<TriX xmlns=\"http://www.w3.org/2004/03/trix/trix-1/\" >\n"
 
   override def footer = "</TriX>\n"
