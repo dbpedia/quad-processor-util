@@ -6,6 +6,7 @@ import java.util.Date
 import java.util.concurrent.atomic.AtomicLong
 
 import org.dbpedia.quad.Quad
+import org.dbpedia.quad.file.{FileLike, IOUtils}
 import org.dbpedia.quad.utils.StringUtils
 
 import scala.collection.mutable
@@ -32,8 +33,10 @@ class LogRecorder[T](
   private val decForm = new DecimalFormat("#.##")
 
   private var datasets: Seq[String] = Seq()
+  private var task: String = "transformation"
 
   private var writerOpen = if(logWriter == null) false else true
+  private var initialized = false
 
   /**
     * A map for failed pages, which could be used for a better way to record extraction fails than just a simple console output.
@@ -142,7 +145,7 @@ class LogRecorder[T](
       case Some(map) => map += ((id,node) -> exception)
       case None =>  failedPageMap += tagi -> mutable.Map[(String, T), Throwable]((id, node) -> exception)
     }
-    printLabeledLine("extraction failed for " + instanceName + " " + id + ": " + name + ": " + exception.getMessage(), RecordSeverity.Exception, tagi, Seq(PrinterDestination.err, PrinterDestination.file))
+    printLabeledLine("{task} failed for " + instanceName + " " + id + ": " + name + ": " + exception.getMessage(), RecordSeverity.Exception, tagi, Seq(PrinterDestination.err, PrinterDestination.file))
     for (ste <- exception.getStackTrace)
       printLabeledLine("\t" + ste.toString, RecordSeverity.Exception, tagi, Seq(PrinterDestination.file), noLabel = true)
   }
@@ -197,7 +200,7 @@ class LogRecorder[T](
     } else print
 
     val status = getStatusValues(tagi)
-    val replacedLine = (if (noLabel) "" else severity.toString + "; " + tagi + "; extraction at {time}{data}; ") + line
+    val replacedLine = (if (noLabel) "" else severity.toString + "; " + tagi + "; {task} at {time} for {data}; ") + line
     val pattern = "\\{\\s*\\w+\\s*\\}".r
     var lastend = 0
     var resultString = ""
@@ -212,6 +215,7 @@ class LogRecorder[T](
             case i if i == "{erate}" => status("erate")
             case i if i == "{fail}" => status("failed")
             case i if i == "{data}" => status("dataset")
+            case i if i == "{task}" => status("task")
             case _ => ""
           }
         case None => ""
@@ -233,17 +237,25 @@ class LogRecorder[T](
     val pages = successfulPages(tag)
     val time = System.currentTimeMillis - startTime.get
     val failed = failedPages(tag)
+    val datasetss = if(datasets.nonEmpty && datasets.size <= 3)
+      datasets.foldLeft[String]("")((x,y) => x + ", " + y).substring(2)
+    else
+      String.valueOf(datasets.size) + " datasets"
 
     Map("pages" -> pages.toString,
       "failed" -> failed.toString,
       "mspp" -> (decForm.format(time.toDouble / pages) + " ms"),
       "erate" -> (if(failed == 0) "0" else ((pages+failed) / failed).toString),
-      "dataset" -> (if(datasets.nonEmpty) datasets.size + " datasets" else ""),
-      "time" -> StringUtils.prettyMillis(time)
+      "dataset" -> datasetss,
+      "time" -> StringUtils.prettyMillis(time),
+      "task" -> this.task
     )
   }
 
-  def initialize(tag: String, datasets: Seq[String] = Seq()): Unit ={
+  def initialize(tag: String, task: String = "transformation", datasets: Seq[String] = Seq()): Unit ={
+    if(initialized)
+      return
+
     failedPageMap = Map[String, scala.collection.mutable.Map[(String, T), Throwable]]()
     successfulPagesMap = Map[String, scala.collection.mutable.Map[String, String]]()
     successfulPageCount = Map[String,AtomicLong]()
@@ -251,12 +263,14 @@ class LogRecorder[T](
     startTime.set(System.currentTimeMillis)
     defaulttag = tag
     this.datasets = datasets
+    this.task = task
 
     if(preamble != null)
       printLabeledLine(preamble, RecordSeverity.Info, tag)
 
     val line = "Extraction started for tag: " + tag + " (" + tag + ")" + (if (datasets.nonEmpty) " on " + datasets.size + " datasets." else "")
     printLabeledLine(line, RecordSeverity.Info, tag)
+    this.initialized = true
   }
 
   override def finalize(): Unit ={
@@ -272,13 +286,20 @@ class LogRecorder[T](
     super.finalize()
   }
 
-  def resetFailedPages(tag: String) = failedPageMap.get(tag) match{
+  def resetFailedPages(tag: String): Unit = failedPageMap.get(tag) match{
     case Some(m) => {
       m.clear()
       successfulPageCount(tag).set(0)
     }
     case None =>
   }
+
+  def resetSuccessfulPages(): Unit ={
+    successfulPagesMap = Map[String, scala.collection.mutable.Map[String, String]]()
+    successfulPageCount = Map[String,AtomicLong]()
+  }
+
+  def setTask(task: String): Unit = this.task = task
 
   object PrinterDestination extends Enumeration {
     val out, err, file = Value
@@ -288,6 +309,13 @@ class LogRecorder[T](
     * the following methods will post messages to a Slack webhook if the Slack-Cedentials are available in the config file
     */
   var lastExceptionMsg = new Date().getTime
+}
+
+object LogRecorder{
+  def create[T](log: FileLike[_] = null, reportInterval: Int = 100000, preamble: String = null): LogRecorder[T] = Option(log) match{
+    case Some(f) => new LogRecorder[T](IOUtils.writer(f, append = true), reportInterval, preamble)
+    case None => new LogRecorder[T](null, reportInterval, preamble)
+  }
 }
 
 /**

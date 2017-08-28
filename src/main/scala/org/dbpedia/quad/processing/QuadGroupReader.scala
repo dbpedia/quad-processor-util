@@ -67,11 +67,9 @@ class QuadGroupReader(val blr: BufferedLineReader, target: FilterTarget.Value, c
   for(i <- 0 until QuadGroupReader.QUEUESIZE){
     lock.lock()
     try{
-      if(blr.hasMoreLines) {
         val ze = worker.work(null.asInstanceOf[String])
-        Await.result(ze.future, Duration.Inf)
+        Await.ready(ze.future, Duration.Inf)
         ne.put(ze)
-      }
     }
     catch{
       case e: Exception => ne.put(Promise.failed(e))
@@ -125,8 +123,7 @@ class QuadGroupReader(val blr: BufferedLineReader, target: FilterTarget.Value, c
 
   private def pollAndPut(): Promise[Seq[Quad]] = {
     val ret = ne.poll()
-    if(blr.hasMoreLines)
-      ne.put(worker.work(null))
+    ne.put(worker.work(null))
     ret
   }
 

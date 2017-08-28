@@ -90,7 +90,7 @@ class BufferedLineReader(reader: Reader) extends BufferedReader(reader){
     if(accessLock.isWriteLocked && !accessLock.validate(stamp))
       throw new IllegalArgumentException("This locked reader was not provided with a valid lock-stamp: " + stamp + " Please unlock or provide correct lock-stamp!")
 
-    if(hasMoreLines && lastLine != null) {
+    if(lastLine != null) {
       linecount = linecount - 1
       charsRead = charsRead -
         (if(lastLine != null)
@@ -98,6 +98,7 @@ class BufferedLineReader(reader: Reader) extends BufferedReader(reader){
       nextLineStr = currentLine
       currentLine = lastLine
       lastLine = null
+      noMoreLines = false
       return true
     }
     false

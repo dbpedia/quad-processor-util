@@ -5,17 +5,19 @@ import java.io.File
 
 import org.dbpedia.quad.Quad
 import org.dbpedia.quad.destination.{Destination, WriterDestination}
-import org.dbpedia.quad.file.{FileLike}
+import org.dbpedia.quad.file.FileLike
 import org.dbpedia.quad.formatters.TerseFormatter
-import org.dbpedia.quad.utils.{TurtleUtils, UriUtils}
 import org.dbpedia.quad.file.IOUtils.writer
+import org.dbpedia.quad.log.LogRecorder
 
 import scala.Console.err
 
 /**
  * Maps old quads/triples to new quads/triples.
  */
-class QuadMapper(log: FileLike[File] = null, reportInterval: Int = 100000, preamble: String = null) extends QuadReader(log, reportInterval, preamble) {
+class QuadMapper(rec: LogRecorder[Quad]) extends QuadReader(rec) {
+
+  def this(log: FileLike[File] = null, reportInterval: Int = 100000, preamble: String = null) = this(LogRecorder.create[Quad](log, reportInterval, preamble))
 
   /**
     * @deprecated don't use it any more!
@@ -99,4 +101,8 @@ class QuadMapper(log: FileLike[File] = null, reportInterval: Int = 100000, pream
 
     ret
   }
+}
+
+object QuadMapper{
+  private def createWithRecorder(rec: LogRecorder[Quad]): QuadReader = new QuadReader(rec)
 }

@@ -45,9 +45,10 @@ object PromisedWork{
 
   val defaultThreads: Int = Runtime.getRuntime.availableProcessors
 
-  private implicit val executionContext = ExecutionContext.fromExecutor(new WorkerExecutor(
-    defaultThreads, defaultThreads, 10000, TimeUnit.MILLISECONDS, 100
-  ))
+  private val executor = new WorkerExecutor(defaultThreads, defaultThreads, 10000, TimeUnit.MILLISECONDS, 100)
+  private implicit val executionContext = ExecutionContext.fromExecutor(executor)
+
+  def shutdownExecutor(): Unit = executor.shutdown()
 
   def isCompletedSuccessfully(future: Future[_]): Boolean ={
       future.value match{
