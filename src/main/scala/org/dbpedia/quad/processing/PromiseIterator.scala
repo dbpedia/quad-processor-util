@@ -10,26 +10,26 @@ import scala.concurrent.{ExecutionContext, Future, Promise}
   * Created by chile on 15.06.17.
   */
 
-class PromiseIterator[R](factory: => Worker[Unit, R], availThreads: Int = defaultThreads , queueLength: Int = defaultThreads)
-  extends PromisedWork[Unit, R](factory) with Iterator[Promise[R]]{
+class PromiseIterator[S, R](factory: => Worker[S, R], val source: S, availThreads: Int = defaultThreads , queueLength: Int = defaultThreads)
+  extends PromisedWork[S, R](factory) with Iterator[Promise[R]]{
 
   private val ne: ArrayBlockingQueue[Promise[R]] = new ArrayBlockingQueue[Promise[R]](1000)
 
   for(i <- 0 until 1000)
-    ne.put(this.work(Unit))
+    ne.put(this.work(source))
 
   override def hasNext: Boolean = !ne.isEmpty
 
   final override def next(): Promise[R] = {
     val ret = ne.poll()
-    ne.put(this.work(Unit))
+    ne.put(this.work(source))
     ret
   }
 }
 
 object PromiseIterator{
 
-  def wrapPromisedWorker[R](pm: PromisedWork[Unit, R]): PromiseIterator[R] = new PromiseIterator[R](pm.getFactory, pm.availThreads, pm.queueLength)
+  def wrapPromisedWorker[S, R](pm: PromisedWork[S, R], source: S): PromiseIterator[S,R] = new PromiseIterator[S,R](pm.getFactory, source, pm.availThreads, pm.queueLength)
 
   /**
     * Convenience 'constructor'. Allows very concise syntax:
@@ -38,18 +38,18 @@ object PromiseIterator{
     * }
     */
 
-  def apply[R](threads: Int, queueLength: Int)(proc: Unit => R): PromiseIterator[R] = {
+  def apply[S, R](source: S, threads: Int, queueLength: Int)(proc: S => R): PromiseIterator[S, R] = {
     wrapPromisedWorker(PromisedWork(threads, queueLength){
-      v:Unit => proc(Unit)
-    }
+      s: S => proc(s)
+    }, source
     )
   }
 
 
-  def byFuture[R](threads: Int, queueLength: Int)(proc: Unit => Future[R]): PromiseIterator[R] = {
+  def byFuture[S, R](source: S, threads: Int, queueLength: Int)(proc: S => Future[R]): PromiseIterator[S, R] = {
     wrapPromisedWorker(PromisedWork.byFuture(threads, queueLength){
-      v:Unit => proc(Unit)
-    }
+      s: S => proc(s)
+    }, source
     )
   }
 
@@ -60,8 +60,8 @@ object PromiseIterator{
     * // do something with foo...
     * }
     */
-  def apply[R](loadFactor: Double, queueDepth: Double)(proc: Unit => R): PromiseIterator[R] = {
-    apply[R]((defaultThreads * loadFactor).toInt, (defaultThreads * loadFactor * queueDepth).toInt)(proc)
+  def apply[S, R](source: S, loadFactor: Double, queueDepth: Double)(proc: S => R): PromiseIterator[S, R] = {
+    apply[S, R](source, (defaultThreads * loadFactor).toInt, (defaultThreads * loadFactor * queueDepth).toInt)(proc)
   }
 
   /**
@@ -70,7 +70,7 @@ object PromiseIterator{
     *   // do something with foo...
     * }
     */
-  def apply[R](proc: Unit => R): PromiseIterator[R] = {
-    apply[R](defaultThreads, defaultThreads)(proc)
+  def apply[S, R](source: S, proc: S => R): PromiseIterator[S, R] = {
+    apply[S, R](source, defaultThreads, defaultThreads)(proc)
   }
 }

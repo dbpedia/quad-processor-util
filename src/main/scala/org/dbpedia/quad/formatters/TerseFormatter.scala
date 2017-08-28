@@ -13,9 +13,9 @@ extends TripleFormatter(() => new TerseBuilder(quads, turtle))
 
   override val serialization: String = (if(turtle) "turtle-" else "n-") + (if(quads) "quads" else "triples")
 
-  override def header = foot.replace("{timestamp}", StringUtils.formatCurrentTimestamp)
+  override def header = head.replace("{timestamp}", StringUtils.formatCurrentTimestamp)
   
-  override def footer = head.replace("{timestamp}", StringUtils.formatCurrentTimestamp)
+  override def footer = foot.replace("{timestamp}", StringUtils.formatCurrentTimestamp)
 
   override def setHeader(head: String): Unit = this.head = head
 

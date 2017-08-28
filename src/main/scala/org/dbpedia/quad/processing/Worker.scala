@@ -1,6 +1,6 @@
 package org.dbpedia.quad.processing
 
-import scala.concurrent.{ExecutionContext, Future, Promise}
+import scala.concurrent.{ExecutionContext, Future}
 
 /**
   * Created by chile on 11.06.17.

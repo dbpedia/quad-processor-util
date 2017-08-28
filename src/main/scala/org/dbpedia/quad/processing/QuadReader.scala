@@ -1,22 +1,19 @@
 package org.dbpedia.quad.processing
 
 import java.io.File
-import java.util.FormatterClosedException
 
 import org.dbpedia.quad.Quad
 import org.dbpedia.quad.file.{BufferedLineReader, FileLike, IOUtils, NoMoreLinesException}
 import org.dbpedia.quad.log.{LogRecorder, RecordEntry, RecordSeverity}
+import org.dbpedia.quad.sort.QuadComparator
 import org.dbpedia.quad.utils.{FilterTarget, StringUtils}
 
 import scala.Console.err
 import scala.collection.mutable.ListBuffer
-import org.dbpedia.quad.processing.PromisedWork._
-import org.dbpedia.quad.sort.{CodePointComparator, QuadComparator}
-
-import scala.concurrent.{Future, Promise}
-import scala.util.{Failure, Success, Try}
+import scala.concurrent.duration.Duration
+import scala.concurrent.{Await, Promise}
 import scala.languageFeature.implicitConversions
-import scala.concurrent.ExecutionContext.Implicits.global
+import scala.util.{Failure, Success, Try}
 
 /**
  */
@@ -30,7 +27,7 @@ class QuadReader(log: FileLike[File] = null, reportInterval: Int = 100000, pream
     case None => new LogRecorder[Quad](null, reportInterval, preamble)
   }
 
-  def getRecorder = recorder
+  def getRecorder: LogRecorder[Quad] = recorder
 
   def addQuadRecord(quad: Quad, lang: String, errorMsg: String = null, error: Throwable = null): Unit ={
     if(errorMsg == null && error == null)
@@ -41,14 +38,13 @@ class QuadReader(log: FileLike[File] = null, reportInterval: Int = 100000, pream
       recorder.record(new RecordEntry[Quad]("", "", quad, RecordSeverity.Warning, lang, errorMsg, error))
   }
 
-  val comparator = new CodePointComparator()
 
   def this(){
     this(null, 100000, null)
   }
 
 
-  private def getSubjectGroupReader(reader: BufferedLineReader) =
+/* private def getSubjectGroupReader(reader: BufferedLineReader) =
     PromisedWork[String, Seq[Quad]](1.5, 1.0) { param: String =>
     val buffer = new ListBuffer[Quad]()
 
@@ -67,46 +63,34 @@ class QuadReader(log: FileLike[File] = null, reportInterval: Int = 100000, pream
     buffer.toList
   }
 
-  private def getGroupReader(reader: BufferedLineReader, target: FilterTarget.Value): PromiseIterator[Seq[Quad]] = {
-    def quadValue = target match {
-      case FilterTarget.subject => (q: Quad) => q.subject
-      case FilterTarget.value => (q: Quad) => q.value
-      case FilterTarget.predicate => (q: Quad) => q.predicate
-      case FilterTarget.graph => (q: Quad) => q.context
-    }
-
-    PromiseIterator.byFuture[Seq[Quad]](12, 8) { v: Unit =>
-      Future {
-        val thisReader = reader
+  private def getGroupReader(reader: BufferedLineReader, target: FilterTarget.Value): PromiseIterator[BufferedLineReader, Seq[Quad]] = {
+    PromiseIterator.apply[BufferedLineReader, Seq[Quad]](reader,12, 8) { blr: BufferedLineReader =>
         val buffer = new ListBuffer[Quad]()
 
-        if (thisReader.hasMoreLines) {
-          var readerQuad: Option[Quad] = readToQuad(thisReader)
+        if (blr.hasMoreLines) {
+          var readerQuad: Option[Quad] = readToQuad(blr)
           readerQuad match {
             case Some(x) => {
-              val value = quadValue(x)
+              val value = FilterTarget.resolveQuadResource(x, target)
 
-              //by adding '>' we make sure that the codepoint comparator has the same environment as in the file (the leading '<' is everywhere the same...)
-
-              while (readerQuad.isDefined && comparator.compare(quadValue(readerQuad.get), value) < 0) {
-                readerQuad = readToQuad(thisReader)
+              while (readerQuad.isDefined && comparator.compare(FilterTarget.resolveQuadResource(readerQuad.get, target), value) < 0) {
+                readerQuad = readToQuad(blr)
               }
-              while (readerQuad.isDefined && comparator.compare(quadValue(readerQuad.get), value) == 0) {
+              while (readerQuad.isDefined && comparator.compare(FilterTarget.resolveQuadResource(readerQuad.get, target), value) == 0) {
                 buffer.append(readerQuad.get)
-                readerQuad = readToQuad(thisReader)
+                readerQuad = readToQuad(blr)
               }
               //set back one line, else we will jump over one
-              thisReader.setBackOneLine()
+              blr.setBackOneLine()
             }
             case None =>
           }
-          buffer.toList
+          buffer
         }
         else
           Seq()
-      }
     }
-  }
+  }*/
 
   def readSortedQuads[T <% FileLike[T]](tag: String, file: FileLike[_])(proc: Traversable[Quad] => Unit): Boolean = {
     //TODO needs extraction-recorder syntax!
@@ -132,16 +116,15 @@ class QuadReader(log: FileLike[File] = null, reportInterval: Int = 100000, pream
 
   def readSortedQuads[T <% FileLike[T]](tag:String, leadFile: FileLike[_], files: Seq[FileLike[_]])(proc: Traversable[Quad] => Unit): Boolean = {
 
-    val readers = files.map(IOUtils.bufferedReader(_))
-    val workers = readers.map(x => getSubjectGroupReader(x))
+    val readers = files.map(x => new QuadGroupReader(IOUtils.bufferedReader(x)))
 
     val ret = readSortedQuads[T](tag, leadFile){ quads =>
       val subj = quads.head.subject
 
-      val futureQuads = for (worker <- workers)
-        yield worker.work(subj)
+      val futureQuads = for (worker <- readers)
+        yield worker.readGroup(subj)
 
-      waitAll(futureQuads)
+      PromisedWork.waitAll(futureQuads)
       val zw = futureQuads.map(x => x.future.value).map(y => y.getOrElse(Try{Seq()}).getOrElse(Seq())).flatten  //TODO make this more readable and insert recovery!
       proc(zw ++ quads)
     }
@@ -149,70 +132,81 @@ class QuadReader(log: FileLike[File] = null, reportInterval: Int = 100000, pream
     ret
   }
 
-  def readSortedQuads (tag:String, files: Seq[FileLike[_]], target: FilterTarget.Value = FilterTarget.subject)(proc: Traversable[Quad] => Unit): Boolean = {
-    val readers = files.map(x => IOUtils.bufferedReader(x))
-    val workers = readers.map(x => getGroupReader(x, target)).toList
+  def readSortedQuads (tag:String, files: Seq[FileLike[_]], target: FilterTarget.Value = FilterTarget.subject)(proc: Traversable[Quad] => Unit): Unit = {
+    val readers = files.map(x => new QuadGroupReader(IOUtils.bufferedReader(x), target))
     val comp = new QuadComparator(target)
 
-    var treeMap :List[(Promise[Seq[Quad]], PromiseIterator[Seq[Quad]])] = List()
-    for (reader <- workers)
-        treeMap = treeMap ::: List((reader.next(), reader))
+    this.getRecorder.initialize(tag)
 
-    PromisedWork.waitAll(treeMap.map(x => x._1.future))
-    treeMap = treeMap.sortWith((x,y) => comp.compare(x._1.future.value.get.get.head, y._1.future.value.get.get.head) < 0)
+    var startup :List[(Promise[Seq[Quad]], QuadGroupReader)] = List()
+    for (reader <- readers)
+      startup = startup ::: List((reader.readGroup(), reader))
+
+    PromisedWork.waitAll(startup.map(x => x._1.future))
+
+    var treeMap :List[(Seq[Quad], QuadGroupReader)] = startup
+      .sortWith((x,y) => comp.compare(x._1.future.value.get.get.head, y._1.future.value.get.get.head) < 0)
+      .map(x => (x._1.future.value.getOrElse(Try{Seq()}).getOrElse(Seq()), x._2))
+
+    var procParam = new ListBuffer[Quad]()
+
+    //empties treemap and finalizes the merge - called right before return!
+    def finalizeMap(): Unit ={
+      treeMap.sortWith((a,b) => comp.compare(a._1.head, b._1.head) < 0).foreach { x =>
+        if (x._2.hasNext)
+          throw new IllegalStateException("Flushing non empty reader.")
+        appendAndExecute(x._1)
+      }
+      if(procParam.nonEmpty)
+        proc(procParam)
+    }
+
+    def appendAndExecute(quads: Seq[Quad]): Unit ={
+      if(procParam.nonEmpty && comp.compare(procParam.head, quads.head) == 0)
+        procParam.appendAll(quads)
+      else{
+        if(procParam.nonEmpty) {
+          this.recorder.record(procParam.map(x => new RecordEntry[Quad](String.valueOf(x.hashCode()), x.subject, x, RecordSeverity.Info, "quad")): _*)
+          proc(procParam)
+        }
+        procParam = new ListBuffer[Quad]()
+        procParam.appendAll(quads)
+      }
+    }
 
     while (true) {
       val head = treeMap.head
-      val next = if(head._2.hasNext) (head._2.next(), head._2) else {
-        workers.collect { case x if x.hasNext => x }.headOption match {
+      appendAndExecute(head._1)
+
+      val next = if(head._2.hasNext)
+        (head._2.next(), head._2)
+      else {
+        readers.find(x => x.hasNext) match {
           case Some(y) => (y.next(), y)
           case None =>
-            proc(head._1.future.value.get.get)
-            return true
+            finalizeMap()
+            return
         }
       }
-      PromisedWork.waitAll(List(next._1.future))
-      val headv = head._1.future.value.get match{
-        case Success(s) => if(s.nonEmpty)
-          s.head
-        else
-          throw new Exception("why?")
-        case Failure(f) => throw f
-      }
+      Await.ready(next._1.future, Duration.Inf)
       val nextv = next._1.future.value.get match{
-        case Success(s) => if(s.nonEmpty) s.head
-        else {
-          proc(head._1.future.value.get.get)
-          return true
-        }
-        case Failure(f) => f match{
-          case n: NoMoreLinesException => {
-            proc(head._1.future.value.get.get)
-            return true
-          }
-          case z => throw z
+        case Success(s) => s
+        case Failure(f) => f match {
+          case f: NoMoreLinesException =>
+            finalizeMap()
+            return
+          case b => throw b
         }
       }
-      val spans = treeMap.tail.span(x => comp.compare(nextv, headv) > 0)
-      treeMap = spans._1 ::: List((next._1, next._2)) ::: spans._2
-      proc(head._1.future.value.get.get)
-    }
-    true
-  }
 
-  private def readToQuad(reader: BufferedLineReader): Option[Quad] = synchronized{
-    if(reader.hasMoreLines) {
-      var readerQuad: Quad = null
-      while (reader.hasMoreLines && readerQuad == null)
-        Quad.unapply(reader.readLine()) match {
-          case Some(q) => readerQuad = q
-          case None =>
-        }
-      Option(readerQuad)
+      if(nextv.nonEmpty) {
+        val spans = treeMap.tail.span(x => comp.compare(nextv.head, x._1.head) > 0)
+        treeMap = spans._1 ::: List((nextv, next._2)) ::: spans._2
+      }
+      else
+        treeMap = treeMap.tail
     }
-    else None
   }
-
 
   /**
    * @param tag for logging
@@ -235,13 +229,12 @@ class QuadReader(log: FileLike[File] = null, reportInterval: Int = 100000, pream
       reader.foreach{ line: String =>
         line match {
           case null => // ignore last value
-          case Quad(quad) => {
+          case Quad(quad) =>
             val copy = quad.copy (
               dataset = dataset
             )
             proc(copy)
             addQuadRecord(copy, tag)
-          }
           case str => if (str.nonEmpty && !str.startsWith("#"))
             addQuadRecord(null, tag, null, new IllegalArgumentException("line did not match quad or triple syntax: " + line))
         }
@@ -263,10 +256,14 @@ class QuadReader(log: FileLike[File] = null, reportInterval: Int = 100000, pream
     true
   }
 
-  def closeReader() = if(this.reader != null) this.reader.close()
+  def closeReader(): Unit = if(this.reader != null) this.reader.close()
 
   private def logRead(tag: String, lines: Int, start: Long): Unit = {
     val micros = (System.nanoTime - start) / 1000
     err.println(tag+": read "+lines+" lines in "+ StringUtils.prettyMillis(micros / 1000)+" ("+(micros.toFloat / lines)+" micros per line)")
   }
 }
+
+//subject=http://www.springernature.com/scigraph/things/articles/ffffea1571f816d5de8cc435e9c70247
+//predicate=http://www.springernature.com/scigraph/ontologies/core/hasContribution
+//value=http://www.springernature.com/scigraph/things/contributions/17b3a81d4fee4d711c771325bcd3f81a

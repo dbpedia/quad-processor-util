@@ -6,7 +6,7 @@ import org.dbpedia.quad.processing.Workers.defaultThreads
 
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, Future, Promise}
-import scala.util.Try
+import scala.util.{Failure, Success, Try}
 
 /**
   * Created by chile on 12.06.17.
@@ -48,6 +48,16 @@ object PromisedWork{
   private implicit val executionContext = ExecutionContext.fromExecutor(new WorkerExecutor(
     defaultThreads, defaultThreads, 10000, TimeUnit.MILLISECONDS, 100
   ))
+
+  def isCompletedSuccessfully(future: Future[_]): Boolean ={
+      future.value match{
+        case Some(v) => v match {
+          case Success(s) => true
+          case Failure(f) => false
+        }
+        case None => false
+      }
+  }
 
   private def lift[T](futures: Traversable[Future[T]]) ={
     futures.map(Await.result(_, Duration.Inf))

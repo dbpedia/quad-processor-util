@@ -1,9 +1,12 @@
 package org.dbpedia.quad.file
 
 import java.io.{BufferedReader, IOException, Reader}
+import java.util.concurrent.locks.{ReentrantLock, StampedLock}
 import java.util.stream.Stream
 
-import scala.util.Try
+import scala.concurrent.Future
+import scala.util.{Failure, Success, Try}
+import scala.concurrent.ExecutionContext.Implicits.global
 
 /**
   * Created by chile on 07.06.17.
@@ -15,10 +18,30 @@ class BufferedLineReader(reader: Reader) extends BufferedReader(reader){
   private var linecount: Int = 0
   private var noMoreLines = false
   private var charsRead = 0l
+  private val accessLock = new StampedLock()
 
-  override def readLine(): String = synchronized{
+  def lockReader(): Future[Long] = Future{accessLock.writeLock()}
+
+  def unlockReader(stamp: Long): Boolean = {
+    if(stamp < 0)
+      return false
+    if(accessLock.isWriteLocked) {
+      Try{accessLock.unlockWrite(stamp)} match{
+        case Success(s) => true
+        case Failure(f) => false
+      }
+    }
+    else
+      true
+  }
+
+  override def readLine(): String = readLine(-1l)
+
+  def readLine(stamp: Long): String = synchronized{
     if(noMoreLines)
       throw new NoMoreLinesException()
+    if(accessLock.isWriteLocked && !accessLock.validate(stamp))
+      throw new IllegalArgumentException("This locked reader was not provided with a valid lock-stamp: " + stamp + " Please unlock or provide correct lock-stamp!")
 
     val ret = if(currentLine == null)
       super.readLine()                  //happens at the start of the file
@@ -38,9 +61,14 @@ class BufferedLineReader(reader: Reader) extends BufferedReader(reader){
     ret
   }
 
+  override def read(): Int = throw new UnsupportedOperationException("BufferedLineReader does only support reading lines!")
+  override def read(chars: Array[Char], i: Int, i1: Int): Int = throw new UnsupportedOperationException("BufferedLineReader does only support reading lines!")
+  override def skip(l: Long): Long = throw new UnsupportedOperationException("BufferedLineReader does only support reading lines!")
+  override def markSupported(): Boolean = false
+
   private def nextLine(): Option[String] ={
     if (nextLineStr != null){
-      val next = nextLineStr               //if setbackOneLine was called last, the next new line is int the nextLine variable, else it comes from the iterator
+      val next = nextLineStr               //if setbackOneLine was called last, the next new line is in the nextLine variable, else it comes from the iterator
       nextLineStr = null
       Some(next)
     }
@@ -58,9 +86,11 @@ class BufferedLineReader(reader: Reader) extends BufferedReader(reader){
 
   def hasMoreLines: Boolean = !noMoreLines
 
-  def setBackOneLine(): Boolean = synchronized{
-    if(lastLine != null) {
-      noMoreLines = false
+  def setBackOneLine(stamp: Long = -1l): Boolean = synchronized{
+    if(accessLock.isWriteLocked && !accessLock.validate(stamp))
+      throw new IllegalArgumentException("This locked reader was not provided with a valid lock-stamp: " + stamp + " Please unlock or provide correct lock-stamp!")
+
+    if(hasMoreLines && lastLine != null) {
       linecount = linecount - 1
       charsRead = charsRead -
         (if(lastLine != null)
