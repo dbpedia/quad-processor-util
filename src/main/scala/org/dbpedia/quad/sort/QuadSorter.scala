@@ -270,7 +270,7 @@ class QuadSorter(val target: FilterTarget.Value, val config: Config = Config.Uni
           numberOfQuads += 1
         }
         buffer.append(initialSorter.work(quads.toList))
-        PromisedWork.waitAll(buffer)
+        PromisedWork.waitPromises(buffer)
 
         sortBuffer()
         fileQuadSize += numberOfQuads
@@ -309,9 +309,9 @@ class QuadSorter(val target: FilterTarget.Value, val config: Config = Config.Uni
     }
 
     val finalPromise = finalMergeSinkWorker.work(prefixGroups.values.toList)
-    val futureList = PromisedWork.waitAll(finalPromise)
+    val futureList = PromisedWork.waitPromises(finalPromise)
 
-    PromisedWork.waitAll(List(futureList.andThen {
+    PromisedWork.waitFutures(List(futureList.andThen {
       case Success(fileList) =>
         if (prefixGroups.size > 1) {
           val headerFooter = createHeaderFooter(finalSize)
@@ -404,7 +404,7 @@ class QuadSorter(val target: FilterTarget.Value, val config: Config = Config.Uni
       }
       posNow += part._1*part._2
     }
-    PromisedWork.waitAll(buffer)
+    PromisedWork.waitPromises(buffer)
 
 
 
@@ -440,7 +440,7 @@ class QuadSorter(val target: FilterTarget.Value, val config: Config = Config.Uni
     if(input.isEmpty)
       return
     input.foreach(x => buffer.append(promisedWork.work(x)))
-    PromisedWork.waitAll(buffer)
+    PromisedWork.waitPromises(buffer)
   }
 
   /**
@@ -513,7 +513,7 @@ class QuadSorter(val target: FilterTarget.Value, val config: Config = Config.Uni
     }
 
     //wait and close writers
-    PromisedWork.waitAll(writerPromise)
+    PromisedWork.waitPromises(writerPromise)
     destinations.foreach(_.close())
 
     //group by prefixes (as tag) and concat output files

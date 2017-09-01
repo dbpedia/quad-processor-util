@@ -71,7 +71,7 @@ class QuadReader(rec: LogRecorder[Quad]) {
       val futureQuads = for (worker <- readers)
         yield worker.readGroup(subj)
 
-      PromisedWork.waitAll(futureQuads)
+      PromisedWork.waitPromises(futureQuads)
       val zw = futureQuads.map(x => x.future.value).map(y => y.getOrElse(Try{Seq()}).getOrElse(Seq())).flatten  //TODO make this more readable and insert recovery!
       proc(zw ++ quads)
     }
@@ -89,7 +89,7 @@ class QuadReader(rec: LogRecorder[Quad]) {
     for (reader <- readers)
       startup = startup ::: List((reader.readGroup(), reader))
 
-    PromisedWork.waitAll(startup.map(x => x._1.future))
+    PromisedWork.waitFutures(startup.map(x => x._1.future))
 
     var treeMap :List[(Seq[Quad], QuadGroupReader)] = startup
       .sortWith((x,y) => comp.compare(x._1.future.value.get.get.head, y._1.future.value.get.get.head) < 0)

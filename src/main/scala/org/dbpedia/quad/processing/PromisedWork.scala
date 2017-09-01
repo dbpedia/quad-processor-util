@@ -65,10 +65,10 @@ object PromisedWork{
     futures
   }
 
-  def waitAll[T](promises: Seq[Promise[T]]): Future[Traversable[T]] =
-    waitAll(promises.map(z => z.future).toList)
+  def waitPromises[T](promises: Seq[Promise[T]]): Future[Traversable[T]] =
+    waitFutures(promises.map(z => z.future))
 
-  def waitAll[T](futures: List[Future[T]]): Future[Traversable[T]] =
+  def waitFutures[T](futures: Seq[Future[T]]): Future[Traversable[T]] =
     Future.sequence(lift(futures)) // having neutralized exception completions through the lifting, .sequence can now be used
 
   def workInParallel[T, R](workers: Traversable[PromisedWork[T, R]], args: Seq[T]): Traversable[Promise[R]] = {
