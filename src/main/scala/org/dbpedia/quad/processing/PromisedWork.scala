@@ -50,6 +50,10 @@ object PromisedWork{
 
   def shutdownExecutor(): Unit = executor.shutdown()
 
+  def isCompletedSuccessfully(promise: Promise[_]): Boolean ={
+    isCompletedSuccessfully(promise.future)
+  }
+
   def isCompletedSuccessfully(future: Future[_]): Boolean ={
       future.value match{
         case Some(v) => v match {

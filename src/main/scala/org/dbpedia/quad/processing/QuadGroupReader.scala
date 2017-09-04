@@ -30,29 +30,26 @@ class QuadGroupReader(val blr: BufferedLineReader, target: FilterTarget.Value, c
     val stamp = Await.result(blr.lockReader(), Duration.Inf)
 
     try {
-      var readerQuad: Try[Quad] = QuadGroupReader.readToQuad(blr, stamp)
+      var readerQuad: Option[Quad] = QuadGroupReader.readToQuad(blr, stamp)
       readerQuad match {
-        case Success(x) => {
+        case Some(x) =>
           val value = Option(until) match {
             case Some(u) => u
             case None => FilterTarget.resolveQuadResource(x, target)
           }
 
-          while (readerQuad.isSuccess && comparator.compare(FilterTarget.resolveQuadResource(readerQuad.get, target), value) < 0) {
+          while (readerQuad.isDefined && comparator.compare(FilterTarget.resolveQuadResource(readerQuad.get, target), value) < 0) {
             readerQuad = QuadGroupReader.readToQuad(blr, stamp)
           }
-          while (readerQuad.isSuccess && comparator.compare(FilterTarget.resolveQuadResource(readerQuad.get, target), value) == 0) {
+          while (readerQuad.isDefined && comparator.compare(FilterTarget.resolveQuadResource(readerQuad.get, target), value) == 0) {
             buffer.append(readerQuad.get)
             readerQuad = QuadGroupReader.readToQuad(blr, stamp)
           }
           //set back one line, else we will jump over one
-          if(readerQuad.isSuccess)
+          if(readerQuad.isDefined)
             blr.setBackOneLine(stamp)
-        }
-        case Failure(_) =>
+        case None =>
       }
-      if(buffer.isEmpty)        //if empty, we add the owl:Nothing Quad so there is always a head
-        buffer.append(Quad.NOTHINGQUAD)
       buffer
     }
     finally{
@@ -97,13 +94,16 @@ class QuadGroupReader(val blr: BufferedLineReader, target: FilterTarget.Value, c
     var ret: Promise[Seq[Quad]] = null
     try {
       ret = pollAndPut()
-      var head = resolvePromise(ret).headOption
-      while(head.isEmpty) {
-        ret = pollAndPut()
-        head = resolvePromise(ret).headOption
+      var head = resolvePromise(ret).headOption match{
+        case Some(s) => s
+        case None => throw new Exception("Empty head: " + (if(peekGroup().isDefined && resolvePromise(peekGroup().get).isEmpty) "EOF" else "NOT!"))
       }
-      while (comparator.compare(FilterTarget.resolveQuadResource(head.get, target), targetValue) < 0) {
+      while (comparator.compare(FilterTarget.resolveQuadResource(head, target), targetValue) < 0) {
         ret = pollAndPut()
+        head = resolvePromise(ret).headOption match{
+          case Some(s) => s
+          case None => throw new Exception("Empty head: " + (if(peekGroup().isDefined && resolvePromise(peekGroup().get).isEmpty) "EOF" else "NOT!"))
+        }
       }
     }
     catch{
@@ -161,8 +161,6 @@ class QuadGroupReader(val blr: BufferedLineReader, target: FilterTarget.Value, c
 
   override def next(): Promise[Seq[Quad]] = readGroup()
 
-
-
   private def resolvePromise(promise: Promise[Seq[Quad]]): Seq[Quad] = promise.future.value.get match{
     case Success(s) => s
     case Failure(f) => throw f
@@ -172,15 +170,16 @@ class QuadGroupReader(val blr: BufferedLineReader, target: FilterTarget.Value, c
 object QuadGroupReader{
   private val QUEUESIZE = 1000
 
-  def readToQuad(reader: BufferedLineReader, stamp: Long = -1l): Try[Quad] = synchronized{
-    Try {
-      var readerQuad: Quad = null
-      while (readerQuad == null)
-        readerQuad = Quad.unapply(reader.readLine(stamp)) match {
-          case Some(q) => q
-          case None => null
-        }
-      readerQuad
-    }
+  /**
+    * transforms a given line from a reader into a Quad, skips over non-quad lines (comments, empty etc.)
+    * @param reader - the line reader
+    * @param stamp - needed if reader is locked
+    * @return
+    */
+  def readToQuad(reader: BufferedLineReader, stamp: Long = -1l): Option[Quad] = synchronized{
+    var readerQuad: Option[Quad] = None
+    while (reader.hasMoreLines && readerQuad.isEmpty)
+      readerQuad = Quad.unapply(reader.readLine(stamp))
+    readerQuad
   }
 }
