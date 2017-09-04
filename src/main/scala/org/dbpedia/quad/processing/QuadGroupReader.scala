@@ -51,6 +51,8 @@ class QuadGroupReader(val blr: BufferedLineReader, target: FilterTarget.Value, c
         }
         case Failure(_) =>
       }
+      if(buffer.isEmpty)        //if empty, we add the owl:Nothing Quad so there is always a head
+        buffer.append(Quad.NOTHINGQUAD)
       buffer
     }
     finally{
@@ -95,7 +97,12 @@ class QuadGroupReader(val blr: BufferedLineReader, target: FilterTarget.Value, c
     var ret: Promise[Seq[Quad]] = null
     try {
       ret = pollAndPut()
-      while (comparator.compare(FilterTarget.resolveQuadResource(resolvePromise(ret).head, target), targetValue) < 0) {
+      var head = resolvePromise(ret).headOption
+      while(head.isEmpty) {
+        ret = pollAndPut()
+        head = resolvePromise(ret).headOption
+      }
+      while (comparator.compare(FilterTarget.resolveQuadResource(head.get, target), targetValue) < 0) {
         ret = pollAndPut()
       }
     }
@@ -158,8 +165,7 @@ class QuadGroupReader(val blr: BufferedLineReader, target: FilterTarget.Value, c
 
   private def resolvePromise(promise: Promise[Seq[Quad]]): Seq[Quad] = promise.future.value.get match{
     case Success(s) => s
-    case Failure(f) =>
-      throw f
+    case Failure(f) => throw f
   }
 }
 

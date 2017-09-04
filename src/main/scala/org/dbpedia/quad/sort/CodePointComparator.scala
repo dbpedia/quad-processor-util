@@ -16,11 +16,15 @@ class CodePointComparator extends Comparator[String] {
       shortestCharDiffPosition = i
   }
 
-  override def compare(t: String, t1: String): Int = {
-    val until = Math.min(t.length, t1.length)
+  override def compare(s1: String, s2: String): Int = {
+    if (s1 == null && s2 == null) return 0
+    else if (s1 == null) return -1
+    else if (s2 == null) return 1
+
+    val until = Math.min(s1.length, s2.length)
     for(i <- 0 until until){
-      val char1 = Character.codePointAt(t, i)
-      val char2 = Character.codePointAt(t1, i)
+      val char1 = Character.codePointAt(s1, i)
+      val char2 = Character.codePointAt(s2, i)
       if(char1 < char2) {
         submitNewCharDiff(i)
         return -1
@@ -31,9 +35,9 @@ class CodePointComparator extends Comparator[String] {
       }
     }
     submitNewCharDiff(until)
-    if(t1.length > t.length)
+    if(s2.length > s1.length)
       return -1
-    if(t.length > t1.length)
+    if(s1.length > s2.length)
       return 1
     0
   }

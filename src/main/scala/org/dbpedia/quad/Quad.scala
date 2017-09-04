@@ -5,6 +5,7 @@ import java.net.URI
 import org.apache.jena.datatypes.{BaseDatatype, RDFDatatype, TypeMapper}
 import org.apache.jena.graph.{Node, NodeFactory}
 import org.dbpedia.quad.Quad._
+import org.dbpedia.quad.sort.CodePointComparator
 
 /**
  * Represents a statement.
@@ -36,10 +37,6 @@ class Quad(
   val context: String,
   val datatype: String
 )extends Ordered[Quad] with Equals with Comparable[Quad] {
-//extends org.apache.jena.sparql.core.Quad(
-//  if(context == null) DEFAULTGRAPH else NodeFactory.createURI(context),
-//  createJenaTriple(subject, predicate, value, datatype, language))
-
 
   // Validate input
   if (subject == null) throw new NullPointerException("subject")
@@ -64,7 +61,7 @@ class Quad(
     datatype
   )
 
-  override def toString() = {
+  override def toString: String = {
    "Quad("+
    "dataset="+dataset+","+
    "subject="+subject+","+
@@ -80,41 +77,34 @@ class Quad(
    * sub classes that add new fields should override this method 
    */
   override def compare(that: Quad): Int = {
+    val comp = new CodePointComparator()
     var c = 0
-    c = this.subject.compareTo(that.subject)
+    c = comp.compare(this.subject, that.subject)
     if (c != 0) return c
-    c = this.predicate.compareTo(that.predicate)
+    c = comp.compare(this.predicate, that.predicate)
     if (c != 0) return c
-    c = this.value.compareTo(that.value)
+    c = comp.compare(this.value, that.value)
     if (c != 0) return c
-    c = safeCompare(this.datatype, that.datatype)
-    if (c != 0) return c
-    c = safeCompare(this.language, that.language)
+    //TODO What if one has a string datatype the other does not?
+    c = comp.compare(this.datatype, that.datatype)
     if (c != 0) return c
     // ignore dataset and context
-    return 0
+    comp.compare(this.language, that.language)
   }
   
   /**
    * sub classes that add new fields should override this method 
    */
   override def canEqual(obj: Any): Boolean = {
-    return obj.isInstanceOf[Quad] 
+    obj.isInstanceOf[Quad]
   }
 
   /**
    * sub classes that add new fields should override this method 
    */
   override def equals(other: Any): Boolean = other match {
-    case that: Quad =>
-      this.eq(that) ||
-      that.canEqual(this) &&
-      this.subject == that.subject &&
-      this.predicate == that.predicate &&
-      this.value == that.value &&
-      this.datatype == that.datatype &&
-      this.language == that.language
-      // ignore dataset and context
+    case that: Quad if this.canEqual(that) =>
+      this.compare(that) == 0
     case _ => false
   }
   
@@ -130,7 +120,7 @@ class Quad(
     hash = prime * hash + safeHash(datatype)
     hash = prime * hash + safeHash(language)
     // ignore dataset and context
-    return hash
+    hash
   }
 
   def hasObjectPredicate: Boolean =
@@ -143,6 +133,7 @@ object Quad
 {
   val STRINGTYPE: RDFDatatype = TypeMapper.getInstance().getTypeByName("http://www.w3.org/2001/XMLSchema#string")
   val DEFAULTGRAPH: Node = NodeFactory.createURI("urn:x-arq:DefaultGraph")
+  val NOTHINGQUAD: Quad = new Quad(null, null, "http://example.org/this/is/nothing", "http://www.w3.org/1999/02/22-rdf-syntax-ns#type", "http://www.w3.org/2002/07/owl#Nothing", null, null)
   /**
    * null-safe comparison. null is equal to null and less than any non-null string.
    */
@@ -164,11 +155,10 @@ object Quad
     val predicate = NodeFactory.createURI(pred)
     val dataType = Option(TypeMapper.getInstance().getTypeByName(dType)) match{
       case Some(dt) => dt
-      case None => {
+      case None =>
         val dt = new BaseDatatype(dType)
         TypeMapper.getInstance().registerDatatype(dt)
         dt
-      }
     }
     val objecct = if(dataType == null || dataType.getURI == STRINGTYPE.getURI)
       NodeFactory.createURI(obj)
