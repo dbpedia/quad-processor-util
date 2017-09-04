@@ -82,7 +82,7 @@ class QuadReader(rec: LogRecorder[Quad]) {
         }
         case None => Seq()
       }
-      proc(otherGroupsQuads ++ quads)
+      proc(otherGroupsQuads.flatten ++ quads)
     }
     readers.foreach(_.close())
     ret
