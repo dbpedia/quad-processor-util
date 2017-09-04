@@ -12,7 +12,7 @@ import org.dbpedia.quad.utils.FilterTarget
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Promise}
-import scala.util.{Failure, Success, Try}
+import scala.util.{Failure, Success}
 
 /**
   * Created by chile on 27.08.17.
@@ -57,10 +57,7 @@ class QuadGroupReader(val blr: BufferedLineReader, target: FilterTarget.Value, c
     }
   }
 
-  private val lock = new ReentrantLock()
-
   for(i <- 0 until QuadGroupReader.QUEUESIZE){
-    lock.lock()
     try{
         val ze = worker.work(null.asInstanceOf[String])
         Await.ready(ze.future, Duration.Inf)
@@ -69,13 +66,9 @@ class QuadGroupReader(val blr: BufferedLineReader, target: FilterTarget.Value, c
     catch{
       case e: Exception => ne.put(Promise.failed(e))
     }
-    finally {
-      lock.unlock()
-    }
   }
 
   def readGroup(): Promise[Seq[Quad]] ={
-    lock.lock()
     var ret: Promise[Seq[Quad]] = null
     try {
       ret = pollAndPut()
@@ -83,14 +76,10 @@ class QuadGroupReader(val blr: BufferedLineReader, target: FilterTarget.Value, c
     catch{
       case e: Exception => ret = Promise.failed(e)
     }
-    finally {
-      lock.unlock()
-    }
     ret
   }
 
   def readGroup(targetValue: String): Promise[Seq[Quad]] ={
-    lock.lock()
     var ret: Promise[Seq[Quad]] = null
     try {
       ret = pollAndPut()
@@ -108,9 +97,6 @@ class QuadGroupReader(val blr: BufferedLineReader, target: FilterTarget.Value, c
     }
     catch{
       case e: Exception => ret = Promise.failed(e)
-    }
-    finally {
-      lock.unlock()
     }
     ret
   }
