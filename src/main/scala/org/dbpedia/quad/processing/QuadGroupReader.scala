@@ -69,14 +69,12 @@ class QuadGroupReader(val blr: BufferedLineReader, target: FilterTarget.Value, c
   }
 
   def readGroup(): Promise[Seq[Quad]] ={
-    var ret: Promise[Seq[Quad]] = null
     try {
-      ret = pollAndPut()
+      pollAndPut()
     }
     catch{
-      case e: Exception => ret = Promise.failed(e)
+      case e: Exception => Promise.failed(e)
     }
-    ret
   }
 
   def readGroup(targetValue: String): Promise[Seq[Quad]] ={
@@ -103,6 +101,8 @@ class QuadGroupReader(val blr: BufferedLineReader, target: FilterTarget.Value, c
       }
       if(compVal > 0)
         ret = Promise.successful(Seq())     //we found no quad with the target value
+      else
+        ret = pollAndPut()
     }
     catch{
       case e: Exception => ret = Promise.failed(e)
