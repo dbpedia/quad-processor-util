@@ -28,10 +28,10 @@ import java.util.*;
 public class SolrHandler implements Closeable {
 	
 	/** SOLR connection URL */
-	final String solrUrl;
+	private final String solrUrl;
 	
 	/** SOLR client instance */
-	SolrClient solrClient;
+	private SolrClient solrClient;
 	
 	/** specifies delay until document is going to be committed [ms] */
 	final static int commitTimeoutDelay = 1_000;
@@ -68,8 +68,7 @@ public class SolrHandler implements Closeable {
 	 */
 	protected SolrClient getSolrClient(final String solrUrl) {
 		//SolrClient solrClient = new ConcurrentUpdateSolrClient(solrUrl, 16, 64);
-		SolrClient solrClient = new HttpSolrClient(solrUrl);
-		return solrClient;	    
+		return new HttpSolrClient(solrUrl);
 	}
 	
 	/**
@@ -114,7 +113,7 @@ public class SolrHandler implements Closeable {
 				}
 				
 				String fieldName = (String) fieldInfo.get("name");
-				if (null != fieldName && false == fieldName.isEmpty()) {				
+				if (null != fieldName && !fieldName.isEmpty()) {
 					knownFieldNames.add(fieldName);
 				}
 			}			
@@ -159,7 +158,7 @@ public class SolrHandler implements Closeable {
 	/**
 	 * This method can be used to add new SOLR documents to the Solr core
 	 * 
-	 * @param solrDocuments	- solr document
+	 * @param solrDocument	- solr document
 	 * @param commit		- commits data to solr
 	 * @throws KgSolrException
 	 */

@@ -1,7 +1,9 @@
 package org.dbpedia.quad.processing
 
+import java.io.IOException
+
 import org.dbpedia.quad.Quad
-import org.dbpedia.quad.file.{BufferedLineReader, FileLike, IOUtils}
+import org.dbpedia.quad.file.{BufferedLineReader, FileLike, IOUtils, NoMoreLinesException}
 import org.dbpedia.quad.log.{LogRecorder, RecordEntry, RecordSeverity}
 import org.dbpedia.quad.sort.QuadComparator
 import org.dbpedia.quad.utils.{FilterTarget, StringUtils}
@@ -171,27 +173,28 @@ class QuadReader(rec: LogRecorder[Quad]) {
             addQuadRecord(null, tag, null, new IllegalArgumentException("line did not match quad or triple syntax: " + line))
         }
         if(stopAt > 0 && reader.getCharsRead > stopAt) {
-          throw new Exception("limit reached - we just break the try object")
+          throw new ReaderLimitReachedException
         }
       } match{
-        case Failure(f) if f.getMessage != null && f.getMessage.startsWith("limit reached") =>
+        case Failure(f) if f.isInstanceOf[ReaderLimitReachedException] =>
           return false    // limit reached -> return without closing the reader
+        case Failure(f) if f.isInstanceOf[NoMoreLinesException] => f.printStackTrace() //TODO remove
         case Failure(f) => throw f
         case _ =>
       }
     }
-    finally
-      if(until < 0)
-        reader.close()
-
-    addQuadRecord(null, tag, "reading quads completed with {page} quads", null)
+    finally {
+      if (until < 0) {
+        closeReader()
+        addQuadRecord(null, tag, "reading quads completed with {page} quads", null)
+      }
+    }
     true
   }
 
   def closeReader(): Unit = if(this.reader != null) this.reader.close()
 
-  private def logRead(tag: String, lines: Int, start: Long): Unit = {
-    val micros = (System.nanoTime - start) / 1000
-    err.println(tag+": read "+lines+" lines in "+ StringUtils.prettyMillis(micros / 1000)+" ("+(micros.toFloat / lines)+" micros per line)")
+  class ReaderLimitReachedException extends IOException{
+    override def getMessage: String = "The defined byte limit of this QuadReader is reached. To read on, call the same method with the until parameter > 0."
   }
 }

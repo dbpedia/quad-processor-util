@@ -12,7 +12,7 @@ import org.dbpedia.quad.utils.FilterTarget
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Promise}
-import scala.util.{Failure, Success}
+import scala.util.{Failure, Success, Try}
 
 /**
   * Created by chile on 27.08.17.
@@ -30,32 +30,28 @@ class QuadGroupReader(val blr: BufferedLineReader, target: FilterTarget.Value, c
     val stamp = Await.result(blr.lockReader(), Duration.Inf)
 
     try {
-      if (blr.hasMoreLines) {
-        var readerQuad: Option[Quad] = QuadGroupReader.readToQuad(blr, stamp)
-        readerQuad match {
-          case Some(x) => {
-            val value = Option(until) match {
-              case Some(u) => u
-              case None => FilterTarget.resolveQuadResource(x, target)
-            }
-
-            while (readerQuad.isDefined && comparator.compare(FilterTarget.resolveQuadResource(readerQuad.get, target), value) < 0) {
-              readerQuad = QuadGroupReader.readToQuad(blr, stamp)
-            }
-            while (readerQuad.isDefined && comparator.compare(FilterTarget.resolveQuadResource(readerQuad.get, target), value) == 0) {
-              buffer.append(readerQuad.get)
-              readerQuad = QuadGroupReader.readToQuad(blr, stamp)
-            }
-            //set back one line, else we will jump over one
-            if(readerQuad.isDefined)
-              blr.setBackOneLine(stamp)
+      var readerQuad: Try[Quad] = QuadGroupReader.readToQuad(blr, stamp)
+      readerQuad match {
+        case Success(x) => {
+          val value = Option(until) match {
+            case Some(u) => u
+            case None => FilterTarget.resolveQuadResource(x, target)
           }
-          case None =>
+
+          while (readerQuad.isSuccess && comparator.compare(FilterTarget.resolveQuadResource(readerQuad.get, target), value) < 0) {
+            readerQuad = QuadGroupReader.readToQuad(blr, stamp)
+          }
+          while (readerQuad.isSuccess && comparator.compare(FilterTarget.resolveQuadResource(readerQuad.get, target), value) == 0) {
+            buffer.append(readerQuad.get)
+            readerQuad = QuadGroupReader.readToQuad(blr, stamp)
+          }
+          //set back one line, else we will jump over one
+          if(readerQuad.isSuccess)
+            blr.setBackOneLine(stamp)
         }
-        buffer
+        case Failure(_) =>
       }
-      else
-        throw new NoMoreLinesException()   //this will be wrapped in the Future and functions as an EOF token
+      buffer
     }
     finally{
       blr.unlockReader(stamp)
@@ -162,17 +158,16 @@ class QuadGroupReader(val blr: BufferedLineReader, target: FilterTarget.Value, c
 object QuadGroupReader{
   private val QUEUESIZE = 1000
 
-  def readToQuad(reader: BufferedLineReader, stamp: Long = -1l): Option[Quad] = synchronized{
-    if(reader.hasMoreLines) {
+  def readToQuad(reader: BufferedLineReader, stamp: Long = -1l): Try[Quad] = synchronized{
+    Try {
       var readerQuad: Quad = null
-      while (reader.hasMoreLines && readerQuad == null)
+      while (readerQuad == null)
         readerQuad = Quad.unapply(reader.readLine(stamp)) match {
           case Some(q) => q
           case None => null
         }
-      Option(readerQuad)
+      readerQuad
     }
-    else None
   }
 
   def resolvePromise(promise: Promise[Seq[Quad]]): Seq[Quad] = promise.future.value.get match{

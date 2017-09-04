@@ -112,7 +112,7 @@ class BufferedLineReader(reader: Reader) extends BufferedReader(reader){
       if (this.hasMoreLines)
         proc(this.readLine())
       else
-        return Try{}
+        throw new NoMoreLinesException
     }
   }
 }
