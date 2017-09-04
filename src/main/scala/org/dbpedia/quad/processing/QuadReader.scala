@@ -6,9 +6,8 @@ import org.dbpedia.quad.Quad
 import org.dbpedia.quad.file.{BufferedLineReader, FileLike, IOUtils, NoMoreLinesException}
 import org.dbpedia.quad.log.{LogRecorder, RecordEntry, RecordSeverity}
 import org.dbpedia.quad.sort.QuadComparator
-import org.dbpedia.quad.utils.{FilterTarget, StringUtils}
+import org.dbpedia.quad.utils.FilterTarget
 
-import scala.Console.err
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Promise}
@@ -176,11 +175,9 @@ class QuadReader(rec: LogRecorder[Quad]) {
           throw new ReaderLimitReachedException
         }
       } match{
-        case Failure(f) if f.isInstanceOf[ReaderLimitReachedException] =>
-          return false    // limit reached -> return without closing the reader
-        case Failure(f) if f.isInstanceOf[NoMoreLinesException] => f.printStackTrace() //TODO remove
+        case Failure(f) if f.isInstanceOf[ReaderLimitReachedException] => return false  // byte limit reached -> return without closing the reader
         case Failure(f) => throw f
-        case _ =>
+        case Success(_) =>                                                              // the BufferedLineReader has reached EOF -> continue to finally and close the reader
       }
     }
     finally {

@@ -95,7 +95,7 @@ class QuadGroupReader(val blr: BufferedLineReader, target: FilterTarget.Value, c
     var ret: Promise[Seq[Quad]] = null
     try {
       ret = pollAndPut()
-      while (comparator.compare(FilterTarget.resolveQuadResource(QuadGroupReader.resolvePromise(ret).head, target), targetValue) < 0) {
+      while (comparator.compare(FilterTarget.resolveQuadResource(resolvePromise(ret).head, target), targetValue) < 0) {
         ret = pollAndPut()
       }
     }
@@ -153,6 +153,14 @@ class QuadGroupReader(val blr: BufferedLineReader, target: FilterTarget.Value, c
   }
 
   override def next(): Promise[Seq[Quad]] = readGroup()
+
+
+
+  private def resolvePromise(promise: Promise[Seq[Quad]]): Seq[Quad] = promise.future.value.get match{
+    case Success(s) => s
+    case Failure(f) =>
+      throw f
+  }
 }
 
 object QuadGroupReader{
@@ -168,12 +176,5 @@ object QuadGroupReader{
         }
       readerQuad
     }
-  }
-
-  def resolvePromise(promise: Promise[Seq[Quad]]): Seq[Quad] = promise.future.value.get match{
-    case Success(s) => s
-    case Failure(f) =>
-      f.printStackTrace()
-      Seq()
   }
 }
