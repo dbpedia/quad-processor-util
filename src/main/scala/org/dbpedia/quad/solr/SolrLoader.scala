@@ -3,9 +3,10 @@ package org.dbpedia.quad.solr
 
 import java.io.File
 import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
+
 import org.dbpedia.quad.file.RichFile
 import org.dbpedia.quad.processing._
-import org.dbpedia.quad.utils.WikiUtil
+import org.dbpedia.quad.utils.{FilterTarget, WikiUtil}
 
 import scala.collection.concurrent
 import scala.collection.convert.decorateAsJava._
@@ -107,11 +108,11 @@ object SolrLoader {
 
     solrHandler.deleteAllDocuments()
 
-    val promised = PromisedWork.workInParallel[String, Boolean](List(disambWorker, redirectWorker), List(language))
+    //val promised = PromisedWork.workInParallel[String, Boolean](List(disambWorker, redirectWorker), List(language))
 
-    PromisedWork.waitPromises(promised.toSeq)
+    //PromisedWork.waitPromises(promised.toSeq)
 
-    new QuadReader(null, 2000, " Documents imported into Solr.").readSortedQuads(language, leadFile, sortedInputs) { quads =>
+    new QuadReader(null, 2000, " Documents imported into Solr.").readSortedQuads(language, leadFile, sortedInputs, FilterTarget.subject) { quads =>
       val doc = new SolrUriInputDocument(quads.head.subject)
       val title = removeUnwanted(WikiUtil.wikiDecode(doc.getId.substring("http://dbpedia.org/resource/".length)))
 

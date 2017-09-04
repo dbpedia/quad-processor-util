@@ -82,18 +82,27 @@ class QuadGroupReader(val blr: BufferedLineReader, target: FilterTarget.Value, c
   def readGroup(targetValue: String): Promise[Seq[Quad]] ={
     var ret: Promise[Seq[Quad]] = null
     try {
-      ret = pollAndPut()
-      var head = resolvePromise(ret).headOption match{
-        case Some(s) => s
-        case None => throw new Exception("Empty head: " + (if(peekGroup().isDefined && resolvePromise(peekGroup().get).isEmpty) "EOF" else "NOT!"))
+      ret = peekGroup() match{
+        case Some(p) => p
+        case None => Promise.failed(new NoMoreLinesException)
       }
-      while (comparator.compare(FilterTarget.resolveQuadResource(head, target), targetValue) < 0) {
-        ret = pollAndPut()
-        head = resolvePromise(ret).headOption match{
-          case Some(s) => s
-          case None => throw new Exception("Empty head: " + (if(peekGroup().isDefined && resolvePromise(peekGroup().get).isEmpty) "EOF" else "NOT!"))
+      var compVal = resolvePromise(ret).headOption match{
+        case Some(h) => comparator.compare(FilterTarget.resolveQuadResource(h, target), targetValue)
+        case None => 1
+      }
+      while (compVal < 0) {
+        pollAndPut()
+        ret = peekGroup() match{
+          case Some(p) => p
+          case None => Promise.failed(new NoMoreLinesException)
+        }
+        compVal = resolvePromise(ret).headOption match{
+          case Some(h) => comparator.compare(FilterTarget.resolveQuadResource(h, target), targetValue)
+          case None => 1
         }
       }
+      if(compVal > 0)
+        ret = Promise.successful(Seq())     //we found no quad with the target value
     }
     catch{
       case e: Exception => ret = Promise.failed(e)

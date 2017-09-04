@@ -41,14 +41,15 @@ class QuadReader(rec: LogRecorder[Quad]) {
       recorder.record(new RecordEntry[Quad]("", "", quad, RecordSeverity.Warning, lang, errorMsg, error))
   }
 
-  def readSortedQuads[T <% FileLike[T]](tag: String, file: FileLike[_])(proc: Traversable[Quad] => Unit): Boolean = {
+  def readSortedQuads[T <% FileLike[T]](tag: String, file: FileLike[_], target: FilterTarget.Value)(proc: Traversable[Quad] => Unit): Boolean = {
     //TODO needs extraction-recorder syntax!
     var lastSubj = ""
     var seq = ListBuffer[Quad]()
     val ret = readQuads(tag, file) { quad =>
-      if(!lastSubj.equals(quad.subject))
+      val value = FilterTarget.resolveQuadResource(quad, target)
+      if(!lastSubj.equals(value))
       {
-        lastSubj = quad.subject
+        lastSubj = value
         if(seq.nonEmpty)
           proc(seq.toList)
         seq.clear()
@@ -63,12 +64,12 @@ class QuadReader(rec: LogRecorder[Quad]) {
     ret
   }
 
-  def readSortedQuads[T <% FileLike[T]](tag:String, leadFile: FileLike[_], files: Seq[FileLike[_]])(proc: Traversable[Quad] => Unit): Boolean = {
+  def readSortedQuads[T <% FileLike[T]](tag:String, leadFile: FileLike[_], files: Seq[FileLike[_]], target: FilterTarget.Value)(proc: Traversable[Quad] => Unit): Boolean = {
 
-    val readers = files.map(x => new QuadGroupReader(IOUtils.bufferedReader(x)))
+    val readers = files.map(x => new QuadGroupReader(IOUtils.bufferedReader(x), target))
 
-    val ret = readSortedQuads[T](tag, leadFile){ quads =>
-      val subj = quads.head.subject
+    val ret = readSortedQuads[T](tag, leadFile, target){ quads =>
+      val subj = FilterTarget.resolveQuadResource(quads.head, target)
       val futureQuads = for (worker <- readers)
         yield worker.readGroup(subj)
 
@@ -88,7 +89,7 @@ class QuadReader(rec: LogRecorder[Quad]) {
     ret
   }
 
-  def readSortedQuads (tag:String, files: Seq[FileLike[_]], target: FilterTarget.Value = FilterTarget.subject)(proc: Traversable[Quad] => Unit): Unit = {
+  def readSortedQuads (tag:String, files: Seq[FileLike[_]], target: FilterTarget.Value)(proc: Traversable[Quad] => Unit): Unit = {
     val readers = files.map(x => new QuadGroupReader(IOUtils.bufferedReader(x), target))
     val comp = new QuadComparator(target)
 

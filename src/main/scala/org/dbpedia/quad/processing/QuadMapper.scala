@@ -9,6 +9,7 @@ import org.dbpedia.quad.file.FileLike
 import org.dbpedia.quad.formatters.TerseFormatter
 import org.dbpedia.quad.file.IOUtils.writer
 import org.dbpedia.quad.log.LogRecorder
+import org.dbpedia.quad.utils.FilterTarget
 
 import scala.Console.err
 
@@ -90,8 +91,9 @@ class QuadMapper(rec: LogRecorder[Quad]) extends QuadReader(rec) {
 
     var mapCount = 0
     destination.open()
+    //TODO FilterTarget???
     val ret = try {
-      readSortedQuads(language, inFile) { old =>
+      readSortedQuads(language, inFile, FilterTarget.subject) { old =>
         destination.write(map(old))
         mapCount += old.size
       }
