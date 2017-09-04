@@ -12,10 +12,13 @@ class WorkerExecutor(corePoolSize: Int,
                      unit: TimeUnit,
                      queueCapacity: Int)
   extends ThreadPoolExecutor(corePoolSize, maximumPoolSize, keepAliveTime, unit, new ArrayBlockingQueue[Runnable](queueCapacity) {
-    override def offer(e: Runnable) = {
-      put(e); // may block if waiting for empty space on queue
-      true
+    override def offer(e: Runnable): Boolean = {
+      if(this.size() == queueCapacity)
+        false
+      else {
+        put(e)
+        true
+      }
     }
   }) {
-
 }
