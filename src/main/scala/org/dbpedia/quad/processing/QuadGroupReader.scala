@@ -2,7 +2,6 @@ package org.dbpedia.quad.processing
 
 import java.io.Closeable
 import java.util.concurrent.ArrayBlockingQueue
-import java.util.concurrent.locks.ReentrantLock
 
 import org.dbpedia.quad.Quad
 import org.dbpedia.quad.file.{BufferedLineReader, NoMoreLinesException}
@@ -11,8 +10,10 @@ import org.dbpedia.quad.utils.FilterTarget
 
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, Promise}
+import scala.concurrent.{Await, Future, Promise}
 import scala.util.{Failure, Success}
+
+import scala.concurrent.ExecutionContext.Implicits.global
 
 /**
   * Created by chile on 27.08.17.
@@ -59,9 +60,7 @@ class QuadGroupReader(val blr: BufferedLineReader, target: FilterTarget.Value, c
 
   for(i <- 0 until QuadGroupReader.QUEUESIZE){
     try{
-        val ze = worker.work(null.asInstanceOf[String])
-        Await.ready(ze.future, Duration.Inf)
-        ne.put(ze)
+        ne.put(worker.work(null.asInstanceOf[String]))
     }
     catch{
       case e: Exception => ne.put(Promise.failed(e))
@@ -121,7 +120,8 @@ class QuadGroupReader(val blr: BufferedLineReader, target: FilterTarget.Value, c
 
   private def pollAndPut(): Promise[Seq[Quad]] = {
     val ret = ne.poll()
-    ne.put(worker.work(null))
+    Future{ne.put(worker.work(null))}
+    Await.ready(ret.future, Duration.Inf)
     ret
   }
 
