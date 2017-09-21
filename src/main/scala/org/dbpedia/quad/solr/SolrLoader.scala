@@ -44,7 +44,6 @@ object SolrLoader {
   private val reversedisambiguations: concurrent.Map[String, Int] = new ConcurrentHashMap[String, Int]().asScala
   private val reverseredirects: concurrent.Map[String, Int] = new ConcurrentHashMap[String, Int]().asScala
 
-  //private var finder: DateFinder[File] = _
   private var suffix: String = _
   private var prefix: String = _
   private var solrHandler: SolrHandler = _
@@ -89,7 +88,11 @@ object SolrLoader {
   private def commitDocQueue(docs: List[KgSorlInputDocument]) = Future {
       solrHandler.addSolrDocuments(docs.asJava)
       true
-    }
+    }.recover{
+    case t: Throwable =>
+      t.printStackTrace()
+      false
+  }
 
   def main(args: Array[String]): Unit = {
 
@@ -197,22 +200,13 @@ object SolrLoader {
                 var trys = 0
                 while(! solrCommitPromise.value.get.get && trys < 5) {
                   System.out.println("Retrying " + nonCommittedDocs + " documents into Solr.")
-                  solrCommitPromise = commitDocQueue(lastQueue.toList).recover{
-                    case t: Throwable =>
-                      t.printStackTrace()
-                      false
-                  }
+                  solrCommitPromise = commitDocQueue(lastQueue.toList)
                   Await.result(solrCommitPromise, Duration.apply(2l, TimeUnit.MINUTES))
                   trys += 1
                 }
 
                 System.out.println("Importing " + nonCommittedDocs + " documents into Solr.")
-                solrCommitPromise = null
-                solrCommitPromise = commitDocQueue(lastQueue.toList).recover{
-                  case t: Throwable =>
-                    t.printStackTrace()
-                    false
-                }
+                solrCommitPromise = commitDocQueue(lastQueue.toList)
                 //clear queue
                 lastQueue = docQueue
                 docQueue.clear()

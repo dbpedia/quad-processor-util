@@ -4,6 +4,7 @@ import java.util.concurrent.atomic.AtomicInteger
 
 import org.dbpedia.quad.processing.Workers.defaultThreads
 
+import scala.collection.generic.CanBuildFrom
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, Future, Promise}
 import scala.util.{Failure, Success, Try}
@@ -45,7 +46,7 @@ object PromisedWork{
 
   val defaultThreads: Int = Runtime.getRuntime.availableProcessors
 
-  private val executor = new WorkerExecutor(defaultThreads, defaultThreads, 10000, TimeUnit.MILLISECONDS, 100)
+  private val executor = new WorkerExecutor(defaultThreads, defaultThreads, 10000, TimeUnit.MILLISECONDS, 10)
   private implicit val executionContext = ExecutionContext.fromExecutor(executor)
 
   def shutdownExecutor(): Unit = executor.shutdown()
@@ -72,8 +73,8 @@ object PromisedWork{
   def waitPromises[T](promises: Seq[Promise[T]]): Future[Traversable[T]] =
     waitFutures(promises.map(z => z.future))
 
-  def waitFutures[T](futures: Seq[Future[T]]): Future[Traversable[T]] =
-    Future.sequence(lift(futures)) // having neutralized exception completions through the lifting, .sequence can now be used
+  def waitFutures[T](futures: Seq[Future[T]])(implicit cbf: CanBuildFrom[Traversable[Future[T]], T, Traversable[T]]): Future[Traversable[T]] =
+    Future.sequence(lift(futures))(cbf, executionContext) // having neutralized exception completions through the lifting, .sequence can now be used
 
   def workInParallel[T, R](workers: Traversable[PromisedWork[T, R]], args: Seq[T]): Traversable[Promise[R]] = {
     try {

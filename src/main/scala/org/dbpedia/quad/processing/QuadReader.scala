@@ -53,11 +53,8 @@ class QuadReader(rec: LogRecorder[Quad]) {
         if(seq.nonEmpty)
           proc(seq.toList)
         seq.clear()
-        seq += quad
       }
-      else{
-        seq += quad
-      }
+      seq += quad
     }
     if(seq.nonEmpty)
       proc(seq.toList)

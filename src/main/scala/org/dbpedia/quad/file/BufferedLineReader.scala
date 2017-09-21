@@ -6,7 +6,6 @@ import java.util.stream.Stream
 
 import scala.concurrent.Future
 import scala.util.{Failure, Success, Try}
-import scala.concurrent.ExecutionContext.Implicits.global
 
 /**
   * Created by chile on 07.06.17.
@@ -20,7 +19,7 @@ class BufferedLineReader(reader: Reader) extends BufferedReader(reader){
   private var charsRead = 0l
   private val accessLock = new StampedLock()
 
-  def lockReader(): Future[Long] = Future{accessLock.writeLock()}
+  def lockReader(): Long = accessLock.writeLock()
 
   def unlockReader(stamp: Long): Boolean = {
     if(stamp < 0)
@@ -37,7 +36,7 @@ class BufferedLineReader(reader: Reader) extends BufferedReader(reader){
 
   override def readLine(): String = readLine(-1l)
 
-  def readLine(stamp: Long): String = synchronized{
+  def readLine(stamp: Long): String = {
     if(noMoreLines)
       throw new NoMoreLinesException()
     if(accessLock.isWriteLocked && !accessLock.validate(stamp))
@@ -78,15 +77,15 @@ class BufferedLineReader(reader: Reader) extends BufferedReader(reader){
 
   def getCharsRead: Long = charsRead
 
-  override def lines(): Stream[String] = synchronized{java.util.stream.Stream.concat(java.util.stream.Stream.of("", currentLine), super.lines())}
+  override def lines(): Stream[String] = java.util.stream.Stream.concat(java.util.stream.Stream.of("", currentLine), super.lines())
 
-  def peek: String = synchronized{currentLine}
+  def peek: String = currentLine
 
   def getLineCount: Int = linecount
 
   def hasMoreLines: Boolean = !noMoreLines
 
-  def setBackOneLine(stamp: Long = -1l): Boolean = synchronized{
+  def setBackOneLine(stamp: Long = -1l): Boolean = {
     if(accessLock.isWriteLocked && !accessLock.validate(stamp))
       throw new IllegalArgumentException("This locked reader was not provided with a valid lock-stamp: " + stamp + " Please unlock or provide correct lock-stamp!")
 

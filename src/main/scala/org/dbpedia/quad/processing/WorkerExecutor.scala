@@ -1,6 +1,6 @@
 package org.dbpedia.quad.processing
 
-import java.util.concurrent.{ArrayBlockingQueue, BlockingQueue, ThreadPoolExecutor, TimeUnit}
+import java.util.concurrent.{ArrayBlockingQueue, ThreadPoolExecutor, TimeUnit}
 
 
 /**
@@ -13,12 +13,15 @@ class WorkerExecutor(corePoolSize: Int,
                      queueCapacity: Int)
   extends ThreadPoolExecutor(corePoolSize, maximumPoolSize, keepAliveTime, unit, new ArrayBlockingQueue[Runnable](queueCapacity) {
     override def offer(e: Runnable): Boolean = {
-      if(this.size() == queueCapacity)
-        false
-      else {
+      try {
+        // if queue is full blocks until a task
+        // is completed and hence no future tasks are submitted.
         put(e)
-        true
+      } catch {
+        case t: InterruptedException => Thread.currentThread().interrupt()
+        case e => throw e
       }
+        true
     }
   }) {
 }

@@ -10,10 +10,9 @@ import org.dbpedia.quad.utils.FilterTarget
 
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, Future, Promise}
+import scala.concurrent.{Await, Promise}
 import scala.util.{Failure, Success}
 
-import scala.concurrent.ExecutionContext.Implicits.global
 
 /**
   * Created by chile on 27.08.17.
@@ -28,7 +27,7 @@ class QuadGroupReader(val blr: BufferedLineReader, target: FilterTarget.Value, c
 
   private val worker = PromisedWork.apply[String, Seq[Quad]]{ until: String =>
     val buffer = new ListBuffer[Quad]()
-    val stamp = Await.result(blr.lockReader(), Duration.Inf)
+    val stamp = blr.lockReader()
 
     try {
       var readerQuad: Option[Quad] = QuadGroupReader.readToQuad(blr, stamp)
@@ -119,8 +118,10 @@ class QuadGroupReader(val blr: BufferedLineReader, target: FilterTarget.Value, c
   def linesRead(): Int = blr.getLineCount
 
   private def pollAndPut(): Promise[Seq[Quad]] = {
-    val ret = ne.poll()
-    Future{ne.put(worker.work(null))}
+    var ret = ne.poll()
+    ne.put(worker.work(null))
+    if(ret == null)
+      ret = Promise.failed(new QueueEmptyException)
     Await.ready(ret.future, Duration.Inf)
     ret
   }
@@ -177,4 +178,8 @@ object QuadGroupReader{
       readerQuad = Quad.unapply(reader.readLine(stamp))
     readerQuad
   }
+}
+
+class QueueEmptyException extends Exception{
+  override def getMessage: String = "Result queue is empty."
 }
