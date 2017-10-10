@@ -26,7 +26,7 @@ import java.util.*;
  *
  */
 public class SolrHandler implements Closeable {
-	
+
 	/** SOLR connection URL */
 	private final String solrUrl;
 	

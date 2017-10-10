@@ -1,9 +1,12 @@
 
 package org.dbpedia.quad.solr
 
-import java.io.File
+import java.io.{File, StringReader}
 import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
 
+import org.apache.lucene.analysis.{TokenStream, Tokenizer}
+import org.apache.lucene.analysis.standard.{StandardTokenizer, StandardTokenizerFactory}
+import org.apache.lucene.analysis.tokenattributes.CharTermAttribute
 import org.dbpedia.quad.file.RichFile
 import org.dbpedia.quad.processing._
 import org.dbpedia.quad.utils.{FilterTarget, WikiUtil}
@@ -25,7 +28,7 @@ object SolrLoader {
 
   private val rdfsLabel = "http://www.w3.org/2000/01/rdf-schema#label"
   private val rdfsComment = "http://www.w3.org/2000/01/rdf-schema#comment"
-  private val foafName = "http://xmlns.com/foaf/0.1/name"
+  private val foafName = "http://xmlns.com/foaf/0.1/name"      //=> altLabel
   private val foafNick = "http://xmlns.com/foaf/0.1/nick"
   private val rdfType = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
   private val dctSubject = "http://purl.org/dc/terms/subject"
@@ -37,13 +40,13 @@ object SolrLoader {
   private val dboSubTitle = "http://dbpedia.org/ontology/subtitle"
   private val skosExact = "http://www.w3.org/2004/02/skos/core#exactMatch"
   private val vrank = "http://purl.org/voc/vrank#rankValue"
-  private val outDegree = "http://dbpedia.org/ontology/wikiPageOutDegree"
 
   private val disambiguations: concurrent.Map[String, ListBuffer[String]] = new ConcurrentHashMap[String, ListBuffer[String]]().asScala
   private val redirects: concurrent.Map[String, ListBuffer[String]] = new ConcurrentHashMap[String, ListBuffer[String]]().asScala
   private val reversedisambiguations: concurrent.Map[String, Int] = new ConcurrentHashMap[String, Int]().asScala
   private val reverseredirects: concurrent.Map[String, Int] = new ConcurrentHashMap[String, Int]().asScala
 
+  //private var finder: DateFinder[File] = _
   private var suffix: String = _
   private var prefix: String = _
   private var solrHandler: SolrHandler = _
@@ -59,10 +62,11 @@ object SolrLoader {
     new QuadMapper().readQuads(language, new RichFile(new File(baseDir, prefix + "redirects" + suffix))) { quad =>
       redirects.get(quad.value) match{
         case Some(l) => l.append(quad.subject)
-        case None =>
+        case None => {
           val zw = new ListBuffer[String]()
           zw.append(quad.subject  )
           redirects.put(quad.value, zw)
+        }
       }
       reverseredirects.put(quad.subject, 0)
     }
@@ -72,26 +76,24 @@ object SolrLoader {
     new QuadMapper().readQuads(language, new RichFile(new File(baseDir, prefix + "disambiguations" + suffix))) { quad =>
       disambiguations.get(quad.value) match{
         case Some(l) => l.append(quad.subject)
-        case None =>
+        case None => {
           val zw = new ListBuffer[String]()
           zw.append(quad.subject  )
           disambiguations.put(quad.value, zw)
+        }
       }
       reversedisambiguations.put(quad.subject, 0)
     }
   }
+
   /**
     * Async document commit to Solr -> so we don't have to wait for its result and can gather more docs in the meantime
     * @param docs
     * @return
     */
   private def commitDocQueue(docs: List[KgSorlInputDocument]) = Future {
-      solrHandler.addSolrDocuments(docs.asJava)
-      true
-    }.recover{
-    case t: Throwable =>
-      t.printStackTrace()
-      false
+    solrHandler.addSolrDocuments(docs.asJava)
+    true
   }
 
   def main(args: Array[String]): Unit = {
@@ -120,38 +122,39 @@ object SolrLoader {
       val title = removeUnwanted(WikiUtil.wikiDecode(doc.getId.substring("http://dbpedia.org/resource/".length)))
 
       //don't safe files and templates
-       if (!title.startsWith("File:") && !title.startsWith("Template:")) {
+      if (!title.startsWith("File:") && !title.startsWith("Template:")) {
         //ignore disambiguation and redirect pages
         reversedisambiguations.get(doc.getId) match {
-          case Some(_) =>
+          case Some(x) =>
           case None => reverseredirects.get(doc.getId) match {
-            case Some(_) =>
-            case None =>
+            case Some(y) =>
+            case None => {
               val altlabels = new ListBuffer[String]()
               val sameass = new ListBuffer[String]()
               val subjects = new ListBuffer[String]()
+              val types = new ListBuffer[String]()
 
               var labelAdded = false
               var commentAdded = false
 
               for (quad <- quads) {
                 quad.predicate match {
-                  case `rdfsLabel` =>
+                  case `rdfsLabel` => {
                     if (!labelAdded) {
                       doc.addFieldData("label", removeUnwanted(quad.value))
                       labelAdded = true
                     }
                     else
                       altlabels.append(quad.value)
-                  case `rdfsComment` if !commentAdded =>
-                    doc.addFieldData("comment_literal", quad.value)
+                  }
+                  case `rdfsComment` if !commentAdded => {
+                    doc.addFieldData("comment", quad.value)
                     commentAdded = true
-                  case `rdfType` => if(!doc.solrDocument.getFieldNames.contains("typeUri"))
-                    doc.addFieldData("typeUri", List(quad.value).asJava) //TODO add other types?
+                  }
+                  case `rdfType` => doc.addFieldData("typeUri", List(quad.value).asJava) //TODO add other types?
                   case `dctSubject` => subjects.append(quad.value)
                   case `vrank` => if(doc.getSolrInputDocument.getField("pagerank") == null)
                     doc.addFieldData("pagerank", quad.value.toFloat)
-                  case `outDegree` => doc.addFieldData("outdegree", quad.value.toInt)
                   case `owlSameAs` | `skosExact` => sameass.append(quad.value)
                   case `foafName` | `foafNick` | `dboSubTitle` | `dboOrigTitle` | `dboTag` | `dboTitle` | `dboAltTitle` => altlabels.append(quad.value)
                   case _ => if (quad.predicate.startsWith("http://dbpedia.org/ontology") && quad.predicate.toLowerCase().contains("name")) altlabels.append(quad.value)
@@ -160,34 +163,39 @@ object SolrLoader {
 
               doc.addFieldData("id", doc.getId)
               doc.addFieldData("title", title)
-
               var entries : List[String]  = altlabels.distinct.map(removeUnwanted).toList
-              enterDynamicField(doc, entries, "altLabel_stemmed")
-              enterDynamicField(doc, entries, "altLabel_literal")
+              //doc.addFieldData("altLabel_phrase", entries.map(x => addPayload("altLabel_phrase", x)).asJava)
+              enterDynamicField(doc, entries, "altLabel")
               doc.addFieldData("altLabel", entries.asJava)
               doc.addFieldData("sameAsUri", sameass.distinct.toList.asJava)
               entries = sameass.distinct.map(x => WikiUtil.wikiDecode(x.substring(x.lastIndexOf("/") + 1))).toList
+              //doc.addFieldData("sameAsText_phrase", entries.map(x => addPayload("sameAsText_phrase", x)).asJava)
               doc.addFieldData("sameAsText", entries.asJava)
-              enterDynamicField(doc, entries, "sameAsText_stemmed")
-              enterDynamicField(doc, entries, "sameAsText_literal")
+              doc.addFieldData("subjectsUri", subjects.distinct.toList.asJava)
+              enterDynamicField(doc, entries, "sameAsText")
+              entries = subjects.distinct.map(x => WikiUtil.wikiDecode(x.substring(x.lastIndexOf("/") + 1))).toList
+              doc.addFieldData("subjectsText", entries.asJava)
 
               redirects.get(doc.getId) match {
-                case Some(x) =>
+                case Some(x) => {
                   entries = x.map(y => WikiUtil.wikiDecode(y.substring("http://dbpedia.org/resource/".length))).toList
+                  //doc.addFieldData("redirectsText_phrase", entries.map(x => addPayload("redirectsText_phrase", x)).asJava)
                   doc.addFieldData("redirectsText", entries.asJava)
                   doc.addFieldData("redirectsUri", x.asJava)
-                  enterDynamicField(doc, entries, "redirectsText_stemmed")
-                  enterDynamicField(doc, entries, "redirectsText_literal")
+                  enterDynamicField(doc, entries, "redirectsText")
+
+                }
                 case None =>
               }
 
               disambiguations.get(doc.getId) match {
-                case Some(x) =>
+                case Some(x) => {
                   entries = x.map(y => WikiUtil.wikiDecode(y.substring("http://dbpedia.org/resource/".length))).toList
+                  //doc.addFieldData("disambiguationsText_phrase", entries.map(x => addPayload("disambiguationsText_phrase", x)).asJava)
                   doc.addFieldData("disambiguationsText", entries.asJava)
                   doc.addFieldData("disambiguationsUri", x.map(y => y).asJava)
-                  enterDynamicField(doc, entries, "disambiguationsText_stemmed")
-                  enterDynamicField(doc, entries, "disambiguationsText_literal")
+                  enterDynamicField(doc, entries, "disambiguationsText")
+                }
                 case None =>
               }
 
@@ -200,19 +208,31 @@ object SolrLoader {
                 var trys = 0
                 while(! solrCommitPromise.value.get.get && trys < 5) {
                   System.out.println("Retrying " + nonCommittedDocs + " documents into Solr.")
-                  solrCommitPromise = commitDocQueue(lastQueue.toList)
+                  solrCommitPromise = commitDocQueue(lastQueue.toList).recover{
+                    case t: Throwable => {
+                      t.printStackTrace()
+                      false
+                    }
+                  }
                   Await.result(solrCommitPromise, Duration.apply(2l, TimeUnit.MINUTES))
                   trys += 1
                 }
 
                 System.out.println("Importing " + nonCommittedDocs + " documents into Solr.")
-                solrCommitPromise = commitDocQueue(lastQueue.toList)
+                solrCommitPromise = commitDocQueue(lastQueue.toList).recover{
+                  case t: Throwable => {
+                    t.printStackTrace()
+                    false
+                  }
+                }
                 //clear queue
                 lastQueue = docQueue
                 docQueue.clear()
               }
               else
                 docQueue.append(doc)
+
+            }
           }
         }
       }
@@ -242,5 +262,21 @@ object SolrLoader {
     for(replace <- replacePatterns)
       res = res.replaceAll(replace._1, "")
     res
+  }
+
+  private val analyzer = new PayloadAnalyzer()
+  def addPayload(field: String, entry: String): String ={
+    /*    var tokens = new ListBuffer[String]()
+        val ts: TokenStream = analyzer.tokenStream(field, new StringReader(entry))
+        ts.reset()
+        while (ts.incrementToken()){
+          tokens += ts.getAttribute(classOf[CharTermAttribute]).toString
+        }
+        ts.close()
+        if(tokens.nonEmpty)
+          tokens.map(x => x + "|" + tokens.size).toList.reduceLeft((x,y) => x + " " + y)
+        else
+          ""*/
+    entry
   }
 }
