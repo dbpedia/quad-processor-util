@@ -15,18 +15,25 @@ import java.util.Collection;
 public class SolrUriInputDocument implements KgSorlInputDocument {
 	
 	/** this is the URI to which this document is mapped to */
-	final protected String uri;
+	private final String id;
 	
 	/** actual document which will be send to SOLR */
-	protected SolrInputDocument solrDocument = new SolrInputDocument();
-	
-	public SolrUriInputDocument(final String uri) {
-		this.uri = uri;
+	private SolrInputDocument solrDocument = new SolrInputDocument();
+
+	private SolrSchema schema;
+
+	public SolrUriInputDocument(final String id) {
+		this.id = id;
 	}
-	
+
+    public SolrUriInputDocument(final String id, final SolrSchema schema) {
+        this.id = id;
+        this.schema = schema;
+    }
+
 	@Override
 	public String getId() {
-		return this.uri;
+		return this.id;
 	}
 	
 	/**
@@ -74,6 +81,14 @@ public class SolrUriInputDocument implements KgSorlInputDocument {
             }
 		}
 	}
+
+	public Object getFieldData(String fieldName){
+        SolrSchema.Field f = schema.getField(fieldName);
+        if(f.isMultiValued())
+            return this.solrDocument.getFieldValues(fieldName);
+        else
+            return this.solrDocument.getFieldValue(fieldName);
+    }
 	
 	
 	/**

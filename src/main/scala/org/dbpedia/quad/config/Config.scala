@@ -1,18 +1,15 @@
 package org.dbpedia.quad.config
 
 import java.io.File
-import java.net.{URI, URL}
+import java.net.URL
 import java.util.Properties
-import java.util.logging.{Level, Logger}
 
 import org.dbpedia.quad.config.ConfigUtils._
 import org.dbpedia.quad.file.RichFile
 import org.dbpedia.quad.formatters.{Formatter, RDFJSONFormatter, TerseFormatter, TriXFormatter}
 
-import scala.collection.Map
-import scala.collection.mutable.HashMap
+import scala.collection.{Map, mutable}
 import scala.util.{Failure, Success}
-
 import scala.collection.convert.decorateAsScala._
 
 class Config(val configPath: String) extends
@@ -22,7 +19,6 @@ class Config(val configPath: String) extends
   if(configPath != null)
     this.putAll(ConfigUtils.loadConfig(configPath))
 
-  val logger = Logger.getLogger(getClass.getName)
   /**
     * load two config files:
     * 1. the universal config containing properties universal for a release
@@ -31,13 +27,6 @@ class Config(val configPath: String) extends
 
   def getArbitraryStringProperty(key: String): Option[String] = {
     Option(getString(this, key))
-  }
-
-  def throwMissingPropertyException(property: String, required: Boolean): Unit ={
-    if(required)
-      throw new IllegalArgumentException("The following required property is missing from the provided .properties file (or has an invalid format): '" + property + "'")
-    else
-      logger.log(Level.WARNING, "The following property is missing from the provided .properties file (or has an invalid format): '" + property + "'. It will not factor in.")
   }
 
   /**
@@ -56,7 +45,7 @@ class Config(val configPath: String) extends
    * directly in the distributed extraction framework - DistConfig.ExtractionConfig extends Config
    * and overrides this val to null because it is not needed)
    */
-  lazy val dumpDir: RichFile = getValue(this, "base-dir", required = true){ x => new File(x)}
+  lazy val dumpDir: RichFile = ConfigUtils.getBaseDir(this)
 
   lazy val parallelProcesses: Int = this.getProperty("parallel-processes", "4").trim.toInt
 
@@ -85,7 +74,7 @@ class Config(val configPath: String) extends
     * directly in the distributed extraction framework - DistConfig.ExtractionConfig extends Config
     * and overrides this val to null because it is not needed)
     */
-  lazy val ontologyFile: File = getValue(this, "ontology", required = false)(new File(_))
+  lazy val ontologyFile: File = getValue(this, "ontology")(new File(_))
 
   lazy val prefixMap : Map[String, String] = getStringMap(this, "prefix-map", ";")
 
@@ -158,7 +147,7 @@ class Config(val configPath: String) extends
   def parseFormats(config: Properties, prefix: String): Map[String, Formatter] = {
 
     val dottedPrefix = prefix + "."
-    val formats = new HashMap[String, Formatter]()
+    val formats = new mutable.HashMap[String, Formatter]()
 
     for (key: String <- config.stringPropertyNames().asScala.toList) {
 
@@ -166,11 +155,11 @@ class Config(val configPath: String) extends
 
         val suffix = key.substring(dottedPrefix.length)
 
-        val settings = getStrings(config, key, ";", true)
+        val settings = getStrings(config, key, ";", required = true)
         require(settings.length == 1 || settings.length == 2, "key '"+key+"' must have one or two values separated by ';' - file format and optional uri policy name")
 
         val formatter =
-          formatters.getOrElse(settings.head, throw error("first value for key '"+key+"' is '"+settings(0)+"' but must be one of "+formatters.keys.toSeq.sorted.mkString("'","','","'")))
+          formatters.getOrElse(settings.head, throw error("first value for key '"+key+"' is '"+settings.head+"' but must be one of "+formatters.keys.toSeq.sorted.mkString("'","','","'")))
 
         formats(suffix) = formatter
       }

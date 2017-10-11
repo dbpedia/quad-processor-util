@@ -6,9 +6,10 @@ import java.util.Properties
 
 import com.fasterxml.jackson.core.JsonFactory
 import com.fasterxml.jackson.databind.{JsonNode, ObjectMapper, ObjectReader}
+import org.dbpedia.quad.file.RichFile
 import org.dbpedia.quad.utils.RichString.wrapString
 
-import scala.util.Try
+import scala.util.{Failure, Success, Try}
 import scala.util.matching.Regex
 
 
@@ -31,27 +32,16 @@ object ConfigUtils {
     */
   val RangeRegex: Regex = """(\d*)-(\d*)""".r
 
-  //val baseDir = getValue(universalConfig , "base-dir", true){
-   // x => new File(x)
-      //if (! dir.exists) throw error("dir "+dir+" does not exist")
-      //dir
-  //}
-
   def loadConfig(filePath: String, charset: String = "UTF-8"): Properties = {
     val file = new File(filePath)
     loadFromStream(new FileInputStream(file), charset)
   }
 
-  def loadConfig(url: URL) = {
-
-    url match {
-      case selection => {
-        if(selection.getFile.endsWith(".json"))
-          loadJsonComfig(url)
-        else
-          loadFromStream(url.openStream())
-      }
-    }
+  def loadConfig(url: URL): Object = {
+    if(url.getFile.endsWith(".json"))
+      loadJsonComfig(url)
+    else
+      loadFromStream(url.openStream())
   }
 
   def loadJsonComfig(url: URL): JsonNode ={
@@ -77,8 +67,10 @@ object ConfigUtils {
 
   def getStrings(config: Properties, key: String, sep: String, required: Boolean = false): Seq[String] = {
     val string = getString(config, key, required)
-    if (string == null) Seq.empty
-    else string.trimSplit(sep)
+    if (string == null)
+      Seq.empty
+    else
+      string.trimSplit(sep)
   }
 
   def getStringMap(config: Properties, key: String, sep: String, required: Boolean = false): Map[String, String] = {
@@ -87,31 +79,74 @@ object ConfigUtils {
 
   def getValue[T](config: Properties, key: String, required: Boolean = false)(map: String => T): T = {
     val string = getString(config, key, required)
-    if (string == null) null.asInstanceOf[T]
-    else map(string)
+    if (string == null)
+      null.asInstanceOf[T]
+    else
+      map(string)
   }
   
   def getString(config: Properties, key: String, required: Boolean = false): String = {
     val string = config.getProperty(key)
-    if (string != null) string
-    else if (! required) null
-    else throw new IllegalArgumentException("property '"+key+"' not defined.")
+    if (string != null)
+      string
+    else if (! required)
+      null
+    else
+      throw new IllegalArgumentException("Property '"+key+"' not defined in properties file.")
   }
 
   def toRange(from: String, to: String): (Int, Int) = {
-    val lo: Int = if (from.isEmpty) 0 else from.toInt
+    val lo: Int = if (from.isEmpty)
+      0
+    else
+      from.toInt
+
     val hi: Int = if (to.isEmpty) Int.MaxValue else to.toInt
-    if (lo > hi) throw new NumberFormatException
+    if (lo > hi)
+      throw new NumberFormatException
     (lo, hi)
   }
 
   def parseVersionString(str: String): Try[String] =Try {
     Option(str) match {
       case Some(v) => "2\\d{3}-\\d{2}".r.findFirstMatchIn(v.trim) match {
-        case Some(y) => if (y.end == 7) v.trim else throw new IllegalArgumentException("Provided version string did not match 2\\d{3}-\\d{2}")
+        case Some(y) => if (y.end == 7)
+            v.trim
+          else
+            throw new IllegalArgumentException("Provided version string did not match 2\\d{3}-\\d{2}")
         case None => throw new IllegalArgumentException("Provided version string did not match 2\\d{3}-\\d{2}")
       }
       case None => throw new IllegalArgumentException("No version string was provided.")
     }
+  }
+
+  def getBaseDir(properties: Properties): RichFile ={
+    Try{new File(getString(properties , "base-dir", required = true))} match{
+      case Success(d) => if (! d.exists)
+          throw sys.error("dir "+d+" does not exist")
+        else
+          d
+      case Failure(f) => throw f
+    }
+  }
+
+  private def loadRichFile(properties: Properties, key: String, suffix: String = null, exists: Boolean = false): RichFile ={
+    val baseDir = getBaseDir(properties)
+    val fileStump = getString(properties, key, required = true)
+
+    Try{new File(baseDir.getFile, fileStump + (if(suffix != null) suffix else ""))} match{
+      case Success(f) if !exists || exists && f.exists() => f
+      case _ => sys.error(fileStump + (if(suffix != null) suffix else "") + " does not exist!")
+    }
+  }
+
+  def loadInputFile(properties: Properties, key: String, suffix: String = null): RichFile ={
+    val suf = if(suffix != null) suffix else getString(properties, "suffix")
+    loadRichFile(properties, key, suf, exists = true)
+  }
+
+  def loadOutputFile(properties: Properties, key: String, suffix: String = null): RichFile ={
+    val suf = if(suffix != null) suffix else getString(properties, "output-suffix")
+    loadRichFile(properties, key, suf)
   }
 }

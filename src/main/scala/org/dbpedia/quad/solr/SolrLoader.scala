@@ -4,9 +4,6 @@ package org.dbpedia.quad.solr
 import java.io.{File, StringReader}
 import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
 
-import org.apache.lucene.analysis.{TokenStream, Tokenizer}
-import org.apache.lucene.analysis.standard.{StandardTokenizer, StandardTokenizerFactory}
-import org.apache.lucene.analysis.tokenattributes.CharTermAttribute
 import org.dbpedia.quad.file.RichFile
 import org.dbpedia.quad.processing._
 import org.dbpedia.quad.utils.{FilterTarget, WikiUtil}
@@ -262,21 +259,5 @@ object SolrLoader {
     for(replace <- replacePatterns)
       res = res.replaceAll(replace._1, "")
     res
-  }
-
-  private val analyzer = new PayloadAnalyzer()
-  def addPayload(field: String, entry: String): String ={
-    /*    var tokens = new ListBuffer[String]()
-        val ts: TokenStream = analyzer.tokenStream(field, new StringReader(entry))
-        ts.reset()
-        while (ts.incrementToken()){
-          tokens += ts.getAttribute(classOf[CharTermAttribute]).toString
-        }
-        ts.close()
-        if(tokens.nonEmpty)
-          tokens.map(x => x + "|" + tokens.size).toList.reduceLeft((x,y) => x + " " + y)
-        else
-          ""*/
-    entry
   }
 }
