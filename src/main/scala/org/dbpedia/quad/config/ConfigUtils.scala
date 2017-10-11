@@ -6,7 +6,7 @@ import java.util.Properties
 
 import com.fasterxml.jackson.core.JsonFactory
 import com.fasterxml.jackson.databind.{JsonNode, ObjectMapper, ObjectReader}
-import org.dbpedia.quad.file.RichFile
+import org.dbpedia.quad.file.{FileLike, RichFile}
 import org.dbpedia.quad.utils.RichString.wrapString
 
 import scala.util.{Failure, Success, Try}
@@ -133,10 +133,14 @@ object ConfigUtils {
   private def loadRichFile(properties: Properties, key: String, suffix: String = null, exists: Boolean = false): RichFile ={
     val baseDir = getBaseDir(properties)
     val fileStump = getString(properties, key, required = true)
+    val fs = baseDir.getFile.getAbsoluteFile + "/" + fileStump + (if(suffix != null) suffix else "")
+    loadRichFile(fs, exists)
+  }
 
-    Try{new File(baseDir.getFile, fileStump + (if(suffix != null) suffix else ""))} match{
+  def loadRichFile(file: String, exists: Boolean): RichFile ={
+    Try{new File(file)} match{
       case Success(f) if !exists || exists && f.exists() => f
-      case _ => sys.error(fileStump + (if(suffix != null) suffix else "") + " does not exist!")
+      case _ => sys.error(file + " does not exist!")
     }
   }
 

@@ -51,15 +51,19 @@ public class SolrUriInputDocument implements KgSorlInputDocument {
 		if (null == fieldName || null == fieldData) {
 			return;
 		}
-		SolrSchema.Field f = schema.getField(fieldName);
-		if(f == null)
-		    throw new IllegalArgumentException("The schema does not have a field called " + fieldName);
+		if(schema != null) {
+            SolrSchema.Field f = schema.getField(fieldName);
+            if (f == null)
+                throw new IllegalArgumentException("The schema does not have a field called " + fieldName);
 
-        if(f.isMultiValued())
-            addFieldData(fieldName, Collections.singletonList(fieldData), boost);
+            if (f.isMultiValued()) {
+                addFieldData(fieldName, Collections.singletonList(fieldData), boost);
+                return;
+            }
 
-        if(this.solrDocument.getFieldValue(fieldName) != null)
-            throw new IllegalArgumentException("This field already has a value:" + fieldName);
+            if (this.solrDocument.getFieldValue(fieldName) != null)
+                throw new IllegalArgumentException("This field already has a value:" + fieldName);
+        }
 
 		this.solrDocument.addField(fieldName, fieldData, boost);
 	}
@@ -79,12 +83,14 @@ public class SolrUriInputDocument implements KgSorlInputDocument {
 			return;
 		}
 
-        SolrSchema.Field f = schema.getField(fieldName);
-        if(f == null)
-            throw new IllegalArgumentException("The schema does not have a field called " + fieldName);
+        if(schema != null) {
+            SolrSchema.Field f = schema.getField(fieldName);
+            if (f == null)
+                throw new IllegalArgumentException("The schema does not have a field called " + fieldName);
 
-        if(!f.isMultiValued())
-            throw new IllegalArgumentException("This field is not defined as 'multivalued': " + fieldName);
+            if (!f.isMultiValued())
+                throw new IllegalArgumentException("This field is not defined as 'multivalued': " + fieldName);
+        }
 
 		//for multivalued fields the boost should only be applied once, since lucene combines (by * or +) the boosts of each value into one
         // see e.g. here: http://lucene.472066.n3.nabble.com/Index-time-Boosting-td474182.html
@@ -100,8 +106,7 @@ public class SolrUriInputDocument implements KgSorlInputDocument {
 	}
 
 	public Object getFieldData(String fieldName){
-        SolrSchema.Field f = schema.getField(fieldName);
-        if(f.isMultiValued())
+        if(schema!= null && schema.getField(fieldName).isMultiValued())
             return this.solrDocument.getFieldValues(fieldName);
         else
             return this.solrDocument.getFieldValue(fieldName);

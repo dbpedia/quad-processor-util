@@ -14,9 +14,11 @@ import javax.xml.xpath.XPathConstants;
 import javax.xml.xpath.XPathExpression;
 import javax.xml.xpath.XPathExpressionException;
 import javax.xml.xpath.XPathFactory;
-import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -27,12 +29,13 @@ public class SolrSchema {
     private XPathFactory xPathfactory = XPathFactory.newInstance();
     private DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
 
-    private XPathExpression fieldPath = xPathfactory.newXPath().compile("/schema/field");
+    private XPathExpression fieldPath = xPathfactory.newXPath().compile("/schema/field|/schema/dynamicField");
 
     private Document schema;
     private HashMap<String, Field> fields = new HashMap<>();
+    private HashMap<String, Field> dynamics = new HashMap<>();
 
-    public SolrSchema(File schemaFile) throws IOException, SAXException, ParserConfigurationException, XPathExpressionException {
+    public SolrSchema(InputStream schemaFile) throws IOException, SAXException, ParserConfigurationException, XPathExpressionException {
         DocumentBuilder builder = factory.newDocumentBuilder();
         schema = builder.parse(schemaFile);
         loadFields();
@@ -43,7 +46,17 @@ public class SolrSchema {
     }
 
     public Field getField(String name){
-        return fields.get(name);
+        Field f = fields.get(name);
+        if(f == null){
+            Optional<Map.Entry<String, Field>> option = dynamics.entrySet().stream().filter(x ->{
+                        boolean zw = x.getKey().startsWith("*") && name.endsWith(x.getKey().substring(1)) ||
+                        x.getKey().endsWith("*") && name.startsWith(x.getKey().substring(0, x.getKey().length()-1));
+                        return zw;
+            }).findFirst();
+            return option.map(Map.Entry::getValue).orElse(null);
+        }
+        else
+            return f;
     }
 
     private void loadFields() throws XPathExpressionException {
@@ -74,11 +87,13 @@ public class SolrSchema {
             if(attributes.getNamedItem("termOffsets") != null)
                 field.setTermOffsets(Boolean.parseBoolean(attributes.getNamedItem("termOffsets").getNodeValue()));
 
-            if(n.getLocalName().equals("dynamicField")){
+            if(n.getNodeName().equals("dynamicField")){
                 field.setDynamic(true);
+                dynamics.put(field.getName().trim(), field);
             }
+            else
+                fields.put(field.getName().trim(), field);
 
-            fields.put(field.getName(), field);
         }
     }
 
