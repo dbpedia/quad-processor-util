@@ -165,16 +165,14 @@ object SolrLoader {
               doc.addFieldData("title", title)
               var entries : List[String]  = altlabels.distinct.map(removeUnwanted).toList
               //doc.addFieldData("altLabel_phrase", entries.map(x => addPayload("altLabel_phrase", x)).asJava)
-              //doc.addFieldData("altLabel", entries.asJava)
               enterDynamicField(doc, entries, "altLabel")
-              enterDynamicField(doc, entries, "altLabel_stemmed")
+              doc.addFieldData("altLabel", entries.asJava)
               doc.addFieldData("sameAsUri", sameass.distinct.toList.asJava)
               entries = sameass.distinct.map(x => WikiUtil.wikiDecode(x.substring(x.lastIndexOf("/") + 1))).toList
               //doc.addFieldData("sameAsText_phrase", entries.map(x => addPayload("sameAsText_phrase", x)).asJava)
-              //doc.addFieldData("sameAsText", entries.asJava)
-              enterDynamicField(doc, entries, "sameAsText")
-              enterDynamicField(doc, entries, "sameAs_stemmed")
+              doc.addFieldData("sameAsText", entries.asJava)
               doc.addFieldData("subjectsUri", subjects.distinct.toList.asJava)
+              enterDynamicField(doc, entries, "sameAsText")
               entries = subjects.distinct.map(x => WikiUtil.wikiDecode(x.substring(x.lastIndexOf("/") + 1))).toList
               doc.addFieldData("subjectsText", entries.asJava)
 
@@ -182,10 +180,9 @@ object SolrLoader {
                 case Some(x) => {
                   entries = x.map(y => WikiUtil.wikiDecode(y.substring("http://dbpedia.org/resource/".length))).toList
                   //doc.addFieldData("redirectsText_phrase", entries.map(x => addPayload("redirectsText_phrase", x)).asJava)
-                  //doc.addFieldData("redirectsText", entries.asJava)
+                  doc.addFieldData("redirectsText", entries.asJava)
                   doc.addFieldData("redirectsUri", x.asJava)
                   enterDynamicField(doc, entries, "redirectsText")
-                  enterDynamicField(doc, entries, "redirects_stemmed")
 
                 }
                 case None =>
@@ -195,10 +192,9 @@ object SolrLoader {
                 case Some(x) => {
                   entries = x.map(y => WikiUtil.wikiDecode(y.substring("http://dbpedia.org/resource/".length))).toList
                   //doc.addFieldData("disambiguationsText_phrase", entries.map(x => addPayload("disambiguationsText_phrase", x)).asJava)
-                  //doc.addFieldData("disambiguationsText", entries.asJava)
+                  doc.addFieldData("disambiguationsText", entries.asJava)
                   doc.addFieldData("disambiguationsUri", x.map(y => y).asJava)
                   enterDynamicField(doc, entries, "disambiguationsText")
-                  enterDynamicField(doc, entries, "disambiguations_stemmed")
                 }
                 case None =>
               }
