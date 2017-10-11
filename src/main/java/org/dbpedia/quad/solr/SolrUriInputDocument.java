@@ -4,6 +4,7 @@ package org.dbpedia.quad.solr;
 import org.apache.solr.common.SolrInputDocument;
 
 import java.util.Collection;
+import java.util.Collections;
 
 /**
  * This class can be used to create a SOLR document
@@ -50,6 +51,15 @@ public class SolrUriInputDocument implements KgSorlInputDocument {
 		if (null == fieldName || null == fieldData) {
 			return;
 		}
+		SolrSchema.Field f = schema.getField(fieldName);
+		if(f == null)
+		    throw new IllegalArgumentException("The schema does not have a field called " + fieldName);
+
+        if(f.isMultiValued())
+            addFieldData(fieldName, Collections.singletonList(fieldData), boost);
+
+        if(this.solrDocument.getFieldValue(fieldName) != null)
+            throw new IllegalArgumentException("This field already has a value:" + fieldName);
 
 		this.solrDocument.addField(fieldName, fieldData, boost);
 	}
@@ -68,6 +78,13 @@ public class SolrUriInputDocument implements KgSorlInputDocument {
 		if (null == fieldName || null == fieldDataCollection || fieldDataCollection.isEmpty()) {
 			return;
 		}
+
+        SolrSchema.Field f = schema.getField(fieldName);
+        if(f == null)
+            throw new IllegalArgumentException("The schema does not have a field called " + fieldName);
+
+        if(!f.isMultiValued())
+            throw new IllegalArgumentException("This field is not defined as 'multivalued': " + fieldName);
 
 		//for multivalued fields the boost should only be applied once, since lucene combines (by * or +) the boosts of each value into one
         // see e.g. here: http://lucene.472066.n3.nabble.com/Index-time-Boosting-td474182.html

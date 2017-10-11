@@ -75,7 +75,6 @@ public class SolrSchema {
                 field.setTermOffsets(Boolean.parseBoolean(attributes.getNamedItem("termOffsets").getNodeValue()));
 
             if(n.getLocalName().equals("dynamicField")){
-                field.setMultiValued(true);
                 field.setDynamic(true);
             }
 
