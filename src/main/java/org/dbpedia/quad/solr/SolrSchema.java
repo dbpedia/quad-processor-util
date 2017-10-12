@@ -16,13 +16,12 @@ import javax.xml.xpath.XPathExpressionException;
 import javax.xml.xpath.XPathFactory;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Created by chile on 11.10.17.
+ *
+ * This class represents a SOLR Schema field element (field and dynamicField)
  */
 public class SolrSchema {
 
@@ -42,16 +41,18 @@ public class SolrSchema {
     }
 
     public Set<String> getFieldNames(){
-        return fields.keySet();
+        Set<String> zw = new HashSet<>();
+        zw.addAll(fields.keySet());
+        zw.addAll(dynamics.keySet());
+        return zw;
     }
 
     public Field getField(String name){
         Field f = fields.get(name);
         if(f == null){
             Optional<Map.Entry<String, Field>> option = dynamics.entrySet().stream().filter(x ->{
-                        boolean zw = x.getKey().startsWith("*") && name.endsWith(x.getKey().substring(1)) ||
+                        return x.getKey().startsWith("*") && name.endsWith(x.getKey().substring(1)) ||
                         x.getKey().endsWith("*") && name.startsWith(x.getKey().substring(0, x.getKey().length()-1));
-                        return zw;
             }).findFirst();
             return option.map(Map.Entry::getValue).orElse(null);
         }
