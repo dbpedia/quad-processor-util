@@ -47,7 +47,7 @@ object PromisedWork{
   val defaultThreads: Int = Runtime.getRuntime.availableProcessors
 
   private val executor = new WorkerExecutor(defaultThreads, defaultThreads, 10000, TimeUnit.MILLISECONDS, 10)
-  private implicit val executionContext = ExecutionContext.fromExecutor(executor)
+  private implicit val executionContext = ExecutionContext.global
 
   def shutdownExecutor(): Unit = executor.shutdown()
 
@@ -68,6 +68,10 @@ object PromisedWork{
   private def lift[T](futures: Traversable[Future[T]]) ={
     futures.map(Await.result(_, Duration.Inf))
     futures
+  }
+
+  def awaitResults[T](futures: Traversable[Future[T]]): Traversable[T] ={
+    futures.map(Await.result(_, Duration.Inf))
   }
 
   def waitPromises[T](promises: Seq[Promise[T]]): Future[Traversable[T]] =

@@ -19,7 +19,6 @@ class WorkerExecutor(corePoolSize: Int,
         put(e)
       } catch {
         case t: InterruptedException => Thread.currentThread().interrupt()
-        case e => throw e
       }
         true
     }

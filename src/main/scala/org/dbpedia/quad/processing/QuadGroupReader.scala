@@ -157,9 +157,8 @@ class QuadGroupReader(val blr: BufferedLineReader, target: FilterTarget.Value, c
 
   override def next(): Promise[Seq[Quad]] = readGroup()
 
-  private def resolvePromise(promise: Promise[Seq[Quad]]): Seq[Quad] = promise.future.value.get match{
-    case Success(s) => s
-    case Failure(f) => throw f
+  private def resolvePromise(promise: Promise[Seq[Quad]]): Traversable[Quad] = {
+    PromisedWork.awaitResults[Seq[Quad]](Seq(promise.future)).flatten
   }
 }
 

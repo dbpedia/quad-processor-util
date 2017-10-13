@@ -4,7 +4,7 @@ import java.util.concurrent.ArrayBlockingQueue
 
 import org.dbpedia.quad.processing.Workers.defaultThreads
 
-import scala.concurrent.{ExecutionContext, Future, Promise}
+import scala.concurrent.{Future, Promise}
 
 /**
   * Created by chile on 15.06.17.

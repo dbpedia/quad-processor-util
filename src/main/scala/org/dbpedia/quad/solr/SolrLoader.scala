@@ -110,9 +110,9 @@ object SolrLoader {
 
     solrHandler.deleteAllDocuments()
 
-    val promised = PromisedWork.workInParallel[String, Boolean](List(disambWorker, redirectWorker), List(language))
+    //val promised = PromisedWork.workInParallel[String, Boolean](List(disambWorker, redirectWorker), List(language))
 
-    PromisedWork.waitPromises(promised.toSeq)
+    //PromisedWork.waitPromises(promised.toSeq)
 
     new QuadReader(null, 2000, " Documents imported into Solr.").readSortedQuads(language, leadFile, sortedInputs, FilterTarget.subject) { quads =>
       val doc = new SolrUriInputDocument(quads.head.subject)
