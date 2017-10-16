@@ -12,12 +12,12 @@ import scala.collection.{Map, mutable}
 import scala.util.{Failure, Success}
 import scala.collection.convert.decorateAsScala._
 
-class Config(val configPath: String) extends
+class Config(properties: Properties) extends
   Properties(Config.universalProperties)
 {
+  def this(configPath: String) = this(ConfigUtils.loadConfig(configPath))
 
-  if(configPath != null)
-    this.putAll(ConfigUtils.loadConfig(configPath))
+  this.putAll(properties)
 
   /**
     * load two config files:
@@ -204,6 +204,6 @@ object Config{
    )
 
   private val universalProperties: Properties = loadConfig(this.getClass.getClassLoader.getResource("universal.properties")).asInstanceOf[Properties]
-  val UniversalConfig: Config = new Config(null)
+  val UniversalConfig: Config = new Config(universalProperties)
 
 }

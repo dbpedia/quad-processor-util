@@ -98,7 +98,7 @@ public class SolrSchema {
         }
     }
 
-    class Field{
+    public class Field{
         private String name;
         private String type;
         private String property = null;
