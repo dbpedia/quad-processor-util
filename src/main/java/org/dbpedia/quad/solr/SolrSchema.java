@@ -1,6 +1,5 @@
 package org.dbpedia.quad.solr;
 
-import com.sun.tools.javac.util.Assert;
 import org.w3c.dom.Document;
 import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.Node;
@@ -67,8 +66,8 @@ public class SolrSchema {
             NamedNodeMap attributes = n.getAttributes();
             Node name = attributes.getNamedItem("name");
             Node type = attributes.getNamedItem("type");
-            Assert.checkNonNull(name, "A field in the schema file has no name attribute!");
-            Assert.checkNonNull(type, "A field in the schema file has no type attribute!");
+            //Assert.checkNonNull(name, "A field in the schema file has no name attribute!");
+            //Assert.checkNonNull(type, "A field in the schema file has no type attribute!");
 
             Field field = new Field(name.getNodeValue(), type.getNodeValue());
             if(attributes.getNamedItem("property") != null)
