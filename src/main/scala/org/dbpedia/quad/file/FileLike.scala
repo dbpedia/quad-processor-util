@@ -7,7 +7,7 @@ import scala.util.Try
 /**
  * Allows common handling of java.io.File and java.nio.file.Path
  */
-trait FileLike[T] {
+trait FileLike[T] extends StreamSourceLike{
 
   /**
    * @return full path
@@ -17,15 +17,12 @@ trait FileLike[T] {
   /**
    * @return file name, or null if file path has no parts
    */
-  def name: String
 
   def resolve(name: String): Try[T]
 
   def names: List[String]
 
   def list: List[T]
-
-  def exists: Boolean
 
   @throws[java.io.IOException]("if file does not exist or cannot be deleted")
   def delete(recursive: Boolean = false): Unit
@@ -37,10 +34,6 @@ trait FileLike[T] {
   def isDirectory: Boolean
 
   def hasFiles: Boolean
-
-  def inputStream(): InputStream
-
-  def outputStream(append: Boolean = false): OutputStream
 
   def getFile: File
 }

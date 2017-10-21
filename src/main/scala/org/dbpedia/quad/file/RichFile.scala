@@ -26,6 +26,9 @@ object RichFile {
  * Defines additional methods on Files, which are missing in the standard library.
  */
 class RichFile(file: File) extends FileLike[File] {
+
+  def this(path: String)= this(new File(path))
+
   private var ignoreComp = false
   
   override def toString: String = file.toString

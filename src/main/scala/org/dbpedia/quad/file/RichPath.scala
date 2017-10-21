@@ -1,6 +1,7 @@
 package org.dbpedia.quad.file
 
 import java.io.{File, IOException, InputStream, OutputStream}
+import java.net.URI
 import java.nio.file.StandardOpenOption.{APPEND, CREATE}
 import java.nio.file._
 import java.nio.file.attribute.BasicFileAttributes
@@ -8,7 +9,6 @@ import java.nio.file.attribute.BasicFileAttributes
 import scala.collection.JavaConversions.iterableAsScalaIterable
 import scala.language.implicitConversions
 import scala.util.Try
-
 import org.dbpedia.quad.file.RichPath._
 
 
@@ -47,6 +47,8 @@ object RichPath {
 }
 
 class RichPath(path: Path) extends FileLike[Path] {
+
+  def this(path: String) = this(Paths.get(new URI(path)))
   
   override def toString: String = path.toString
   
