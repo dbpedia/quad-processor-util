@@ -1,6 +1,7 @@
 package org.dbpedia.quad.file
 
 import java.io._
+import java.net.URL
 import java.nio.charset.Charset
 import java.util.zip.{GZIPInputStream, GZIPOutputStream, Inflater, InflaterInputStream}
 
@@ -34,7 +35,7 @@ object IOUtils {
   /**
    * use opener on file, wrap in un/zipper stream if necessary
    */
-  private def open[T](file: FileLike[_], opener: FileLike[_] => T, wrappers: Map[String, T => T]): T = {
+  private def open[T](file: StreamSourceLike[_], opener: StreamSourceLike[_] => T, wrappers: Map[String, T => T]): T = {
     val name = file.name
     val suffix = name.substring(name.lastIndexOf('.') + 1)
     wrappers.getOrElse(suffix, identity[T] _)(opener(file)) 
@@ -43,16 +44,16 @@ object IOUtils {
   /**
    * open output stream, wrap in zipper stream if file suffix indicates compressed file.
    */
-  def outputStream(file: FileLike[_], append: Boolean = false): OutputStream =
+  def outputStream(file: StreamSourceLike[_], append: Boolean = false): OutputStream =
     open(file, _.outputStream(append), zippers)
   
   /**
    * open input stream, wrap in unzipper stream if file suffix indicates compressed file.
    */
-  def inputStream(file: FileLike[_]): InputStream =
+  def inputStream(file: StreamSourceLike[_]): InputStream =
     open(file, _.inputStream(), unzippers)
 
-  def estimateCompressionRatio(file: FileLike[_]): Double ={
+  def estimateCompressionRatio(file: StreamSourceLike[_]): Double ={
     val compIn = inputStream(file)
     val array = new Array[Byte](1000000)
     compIn.read(array)
@@ -92,21 +93,29 @@ object IOUtils {
     ret == 0
   }
 
+  def createStreamSource(uri: String): RichUrl ={
+    Option(IOUtils.getClass.getClassLoader.getResource(uri)) match{
+      case Some(u) => new RichUrl(u)
+      case None if uri.matches("\\w+://(\\w|\\.)+.*") => new RichUrl(uri.trim)
+      case None => new RichUrl("file:///" + (if(uri.startsWith("/")) uri.substring(1) else uri))
+    }
+  }
+
   /**
    * open output stream, wrap in zipper stream if file suffix indicates compressed file,
    * wrap in writer.
    */
-  def writer(file: FileLike[_], append: Boolean = false, charset: Charset = Codec.UTF8.charSet): Writer =
+  def writer(file: StreamSourceLike[_], append: Boolean = false, charset: Charset = Codec.UTF8.charSet): Writer =
     new OutputStreamWriter(outputStream(file, append), charset)
   
   /**
    * open input stream, wrap in unzipper stream if file suffix indicates compressed file,
    * wrap in reader.
    */
-  def reader(file: FileLike[_], charset: Charset = Codec.UTF8.charSet): Reader =
+  def reader(file: StreamSourceLike[_], charset: Charset = Codec.UTF8.charSet): Reader =
     new InputStreamReader(inputStream(file), charset)
 
-  def bufferedReader(file: FileLike[_], charset: Charset = Codec.UTF8.charSet): BufferedLineReader =
+  def bufferedReader(file: StreamSourceLike[_], charset: Charset = Codec.UTF8.charSet): BufferedLineReader =
     new BufferedLineReader(new InputStreamReader(inputStream(file), charset))
   
   /**
@@ -114,7 +123,7 @@ object IOUtils {
    * wrap in reader, wrap in buffered reader, process all lines. The last value passed to
    * proc will be null.
    */
-  def readLines(file: FileLike[_], charset: Charset = Codec.UTF8.charSet)(proc: String => Unit): Unit = {
+  def readLines(file: StreamSourceLike[_], charset: Charset = Codec.UTF8.charSet)(proc: String => Unit): Unit = {
     val reader = this.bufferedReader(file)
     try {
       for (line <- reader) {

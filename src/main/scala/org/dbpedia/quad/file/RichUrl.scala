@@ -7,7 +7,7 @@ import scala.util.{Success, Try}
 /**
   * Created by chile on 21.10.17.
   */
-class RichUrl(url: URL) extends StreamSourceLike{
+class RichUrl(url: URL) extends StreamSourceLike[URL]{
 
   def this(uri: String) = this(new URL(uri))
 
@@ -23,4 +23,13 @@ class RichUrl(url: URL) extends StreamSourceLike{
       case _ => false
     }
   }
+
+  def getURL: URL = url
+}
+
+object RichUrl{
+
+  implicit def wrapFile(file: URL): RichUrl = new RichUrl(file)
+
+  implicit def toFile(file: String): URL = new URL(file)
 }

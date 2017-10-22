@@ -5,7 +5,7 @@ import java.io.{InputStream, OutputStream}
 /**
   * Created by chile on 21.10.17.
   */
-trait StreamSourceLike {
+trait StreamSourceLike[T] {
   def name: String
 
   def inputStream(): InputStream

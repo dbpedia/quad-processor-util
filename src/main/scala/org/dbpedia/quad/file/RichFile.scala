@@ -10,9 +10,9 @@ import org.dbpedia.quad.utils.UriUtils
 
 object RichFile {
 
-  implicit def wrapFile(file: File) = new RichFile(file)
+  implicit def wrapFile(file: File): RichFile = new RichFile(file)
   
-  implicit def toFile(file: String) = new File(file)
+  implicit def toFile(file: String): File = new File(file)
   
   def filenameFilter(pattern: Pattern): FilenameFilter = {
     if (pattern == null) return null

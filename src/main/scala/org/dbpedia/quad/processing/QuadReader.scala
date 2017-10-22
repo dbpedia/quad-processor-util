@@ -3,7 +3,7 @@ package org.dbpedia.quad.processing
 import java.io.IOException
 
 import org.dbpedia.quad.Quad
-import org.dbpedia.quad.file.{BufferedLineReader, FileLike, IOUtils, NoMoreLinesException}
+import org.dbpedia.quad.file._
 import org.dbpedia.quad.log.{LogRecorder, RecordEntry, RecordSeverity}
 import org.dbpedia.quad.sort.QuadComparator
 import org.dbpedia.quad.utils.FilterTarget
@@ -24,7 +24,7 @@ class QuadReader(rec: LogRecorder[Quad]) {
 
   private val recorder: LogRecorder[Quad] = rec
   private var reader: BufferedLineReader = _
-  private var file: FileLike[_] = _
+  private var file: StreamSourceLike[_] = _
 
   def this(){
     this(null, 100000, null)
@@ -41,7 +41,7 @@ class QuadReader(rec: LogRecorder[Quad]) {
       recorder.record(new RecordEntry[Quad]("", "", quad, RecordSeverity.Warning, lang, errorMsg, error))
   }
 
-  def readSortedQuads[T <% FileLike[T]](tag: String, file: FileLike[_], target: FilterTarget.Value)(proc: Traversable[Quad] => Unit): Boolean = {
+  def readSortedQuads[T <% StreamSourceLike[T]](tag: String, file: StreamSourceLike[_], target: FilterTarget.Value)(proc: Traversable[Quad] => Unit): Boolean = {
     //TODO needs extraction-recorder syntax!
     var lastSubj = ""
     var seq = ListBuffer[Quad]()
@@ -61,7 +61,7 @@ class QuadReader(rec: LogRecorder[Quad]) {
     ret
   }
 
-  def readSortedQuads[T <% FileLike[T]](tag:String, leadFile: FileLike[_], files: Seq[FileLike[_]], target: FilterTarget.Value)(proc: Traversable[Quad] => Unit): Boolean = {
+  def readSortedQuads[T <% StreamSourceLike[T]](tag:String, leadFile: StreamSourceLike[_], files: Seq[StreamSourceLike[_]], target: FilterTarget.Value)(proc: Traversable[Quad] => Unit): Boolean = {
 
     val readers = files.map(x => new QuadGroupReader(IOUtils.bufferedReader(x), target))
 
@@ -86,7 +86,7 @@ class QuadReader(rec: LogRecorder[Quad]) {
     ret
   }
 
-  def readSortedQuads (tag:String, files: Seq[FileLike[_]], target: FilterTarget.Value)(proc: Traversable[Quad] => Unit): Unit = {
+  def readSortedQuads (tag:String, files: Seq[StreamSourceLike[_]], target: FilterTarget.Value)(proc: Traversable[Quad] => Unit): Unit = {
     val readers = files.map(x => new QuadGroupReader(IOUtils.bufferedReader(x), target))
     val comp = new QuadComparator(target)
 
@@ -154,7 +154,7 @@ class QuadReader(rec: LogRecorder[Quad]) {
    * @param file input file
    * @param proc process quad
    */
-  def readQuads(tag: String, file: FileLike[_], until: Long = -1l)(proc: Quad => Unit): Boolean = {
+  def readQuads(tag: String, file: StreamSourceLike[_], until: Long = -1l)(proc: Quad => Unit): Boolean = {
     val dataset = "(?<=(.*wiki-\\d{8}-))([^\\.]+)".r.findFirstIn(file.toString) match {
       case Some(x) => Seq(x)
       case None => Seq()

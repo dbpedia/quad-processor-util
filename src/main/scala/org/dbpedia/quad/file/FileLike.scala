@@ -7,7 +7,7 @@ import scala.util.Try
 /**
  * Allows common handling of java.io.File and java.nio.file.Path
  */
-trait FileLike[T] extends StreamSourceLike{
+trait FileLike[T] extends StreamSourceLike[T]{
 
   /**
    * @return full path
