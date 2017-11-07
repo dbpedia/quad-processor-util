@@ -6,7 +6,7 @@ import java.util.Properties
 
 import com.fasterxml.jackson.core.JsonFactory
 import com.fasterxml.jackson.databind.{JsonNode, ObjectMapper, ObjectReader}
-import org.dbpedia.quad.file.{FileLike, RichFile}
+import org.dbpedia.quad.file.{FileLike, IOUtils, RichFile, StreamSourceLike}
 import org.dbpedia.quad.utils.RichString.wrapString
 
 import scala.util.{Failure, Success, Try}
@@ -128,6 +128,10 @@ object ConfigUtils {
           d
       case Failure(f) => throw f
     }
+  }
+
+  def loadStreamingSource(uri: String): StreamSourceLike[_] ={
+    IOUtils.createStreamSource(uri)
   }
 
   private def loadRichFile(properties: Properties, key: String, suffix: String = null, exists: Boolean = false): RichFile ={

@@ -8,6 +8,7 @@ import java.util.zip.{GZIPInputStream, GZIPOutputStream, Inflater, InflaterInput
 import org.apache.commons.compress.compressors.bzip2.{BZip2CompressorInputStream, BZip2CompressorOutputStream}
 
 import scala.io.Codec
+import scala.util.{Failure, Success, Try}
 
 /**
  * TODO: modify the bzip code such that there are no run-time dependencies on commons-compress.
@@ -97,7 +98,10 @@ object IOUtils {
     Option(IOUtils.getClass.getClassLoader.getResource(uri)) match{
       case Some(u) => new RichUrl(u)
       case None if uri.matches("\\w+://(\\w|\\.)+.*") => new RichUrl(uri.trim)
-      case None => new RichUrl("file:///" + (if(uri.startsWith("/")) uri.substring(1) else uri))
+      case None => Try{new File(uri).getAbsoluteFile.toURI.toURL} match{
+        case Success(u) => new RichUrl(u)
+        case Failure(f) => throw f
+      }
     }
   }
 

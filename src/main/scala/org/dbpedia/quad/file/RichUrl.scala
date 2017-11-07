@@ -1,5 +1,5 @@
 package org.dbpedia.quad.file
-import java.io.{InputStream, OutputStream}
+import java.io.{File, InputStream, OutputStream}
 import java.net.URL
 
 import scala.util.{Success, Try}
@@ -29,7 +29,9 @@ class RichUrl(url: URL) extends StreamSourceLike[URL]{
 
 object RichUrl{
 
-  implicit def wrapFile(file: URL): RichUrl = new RichUrl(file)
+  implicit def wrapUrl(file: URL): RichUrl = new RichUrl(file)
 
-  implicit def toFile(file: String): URL = new URL(file)
+  implicit def toUrl(file: String): URL = new URL(file)
+
+  implicit def fromFile(file: File): RichUrl = file.toURI.toURL
 }
