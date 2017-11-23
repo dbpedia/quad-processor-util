@@ -1,36 +1,30 @@
 package org.dbpedia.quad.split
 
 import java.io.File
-import java.util.concurrent.{ArrayBlockingQueue, ConcurrentHashMap, ConcurrentSkipListSet}
+import java.util.concurrent.ConcurrentHashMap
 
 import org.dbpedia.quad.Quad
 import org.dbpedia.quad.config.Config
 import org.dbpedia.quad.destination.{DestinationUtils, FilterDestination, FilterParams}
 import org.dbpedia.quad.file.{FileLike, RichFile}
 import org.dbpedia.quad.formatters.Formatter
-import org.dbpedia.quad.processing.{PromisedWork, QuadReader}
+import org.dbpedia.quad.processing.QuadReader
 import org.dbpedia.quad.utils.RdfNamespace
 
-import scala.collection.{concurrent, mutable}
-import scala.collection.mutable.ListBuffer
 import scala.collection.convert.decorateAsScala._
+import scala.collection.mutable.ListBuffer
+import scala.collection.{concurrent, mutable}
 /**
   * Created by chile on 14.06.17.
   */
 abstract class DumpSplitter(file: FileLike[_]) {
 
-  val destinations = new ConcurrentHashMap[String, FilterDestination]().asScala
-  val writersDestinations = new ConcurrentHashMap[FilterDestination, Int]().asScala
-
-  val worker = PromisedWork[(Quad, FilterDestination), Unit](1.5, 1.5){ input: (Quad, FilterDestination) =>
-    input._2.write(Seq(input._1))
-  }
+  val destinations: concurrent.Map[String, FilterDestination] = new ConcurrentHashMap[String, FilterDestination]().asScala
+  val writersDestinations: concurrent.Map[FilterDestination, Int] = new ConcurrentHashMap[FilterDestination, Int]().asScala
 
   def start = {
       new QuadReader(null, 2000).readQuads("--", file) { quad =>
-        preProcess(quad)
         processQuad(quad)
-        postProcess(quad)
       }
     destinations.values.foreach(_.close())
   }
@@ -41,11 +35,7 @@ abstract class DumpSplitter(file: FileLike[_]) {
     writersDestinations.put(fd, 0)
   }
 
-  def preProcess(quad: Quad): Unit
-
   def processQuad(quad: Quad) : Unit
-
-  def postProcess(quad: Quad): Unit
 }
 
 class PredicateDumpSplitter(baseDir: FileLike[_], file: FileLike[_], predicates: Map[String, Seq[String]], formats: Map[String, Formatter], defaultSet: Boolean)
@@ -53,8 +43,9 @@ class PredicateDumpSplitter(baseDir: FileLike[_], file: FileLike[_], predicates:
 
   DumpSplitter.predicatesToDestination(file, predicates, formats, defaultSet).foreach(x => this.registerNewDestination(x))
 
-  override def preProcess(quad: Quad): Unit = {
-    destinations.get(quad.predicate) match {
+  override def processQuad(quad: Quad): Unit = {
+    destinations.get(quad.predicate) match{
+      case Some(fd) => fd.write(Seq(quad))
       case None if defaultSet => {
         for ((suffix, format) <- formats) {
           val params = FilterParams(null, quad.predicate, null, null, null)
@@ -64,17 +55,9 @@ class PredicateDumpSplitter(baseDir: FileLike[_], file: FileLike[_], predicates:
           this.registerNewDestination(t._2)
         }
       }
-      case Some(x) =>
       case _ =>
     }
   }
-
-  override def processQuad(quad: Quad): Unit = {
-    for(dest <- this.writersDestinations) yield
-      worker.work((quad, dest._1))
-  }
-
-  override def postProcess(quad: Quad): Unit = {}
 }
 
 object DumpSplitter {
