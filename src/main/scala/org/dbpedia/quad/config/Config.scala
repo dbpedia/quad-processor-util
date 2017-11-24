@@ -82,7 +82,9 @@ class Config(properties: Properties) extends
     * all non universal properties...
     */
 
-  lazy val formats: Map[String, Formatter] = parseFormats(this, "format")
+  lazy val tag: String = Option(getString(this, "tag")).getOrElse("qpu")
+
+  lazy val formats: Map[String, Formatter] = parseFormats(this, "format").toMap
   /**
     * An array of input dataset names (e.g. 'instance-types' or 'mappingbased-literals') (separated by a ',')
     */
@@ -94,7 +96,7 @@ class Config(properties: Properties) extends
   /**
     * the suffix of the files representing the input dataset (usually a combination of RDF serialization extension and compression used - e.g. .ttl.bz2 when using the TURTLE triples compressed with bzip2)
     */
-  lazy val inputSuffix: String = getString(this, "suffix")
+  lazy val inputSuffix: String = Option(getString(this, "suffix")).getOrElse("")
   /**
     * same as for inputSuffix (for the output dataset)
     */

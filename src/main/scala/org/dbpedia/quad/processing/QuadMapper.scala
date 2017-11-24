@@ -5,7 +5,7 @@ import java.io.File
 
 import org.dbpedia.quad.Quad
 import org.dbpedia.quad.destination.{Destination, WriterDestination}
-import org.dbpedia.quad.file.FileLike
+import org.dbpedia.quad.file.{FileLike, StreamSourceLike}
 import org.dbpedia.quad.formatters.TerseFormatter
 import org.dbpedia.quad.file.IOUtils.writer
 import org.dbpedia.quad.log.LogRecorder
@@ -81,25 +81,73 @@ class QuadMapper(rec: LogRecorder[Quad]) extends QuadReader(rec) {
     * exist, we probably shouldn't open the destination at all, so it's ok that it's happening in
     * this method after checking the input file.
     */
-  def mapSortedQuads(language: String, inFile: FileLike[_], destination: Destination, required: Boolean)(map: Traversable[Quad] => Traversable[Quad]): Boolean = {
+  def mapSortedQuads(tag: String, inFile: FileLike[_], target: FilterTarget.Value, destination: Destination)(map: Traversable[Quad] => Traversable[Quad]): Boolean = {
 
-    if (! inFile.exists) {
-      if (required) throw new IllegalArgumentException(language+": file "+inFile+" does not exist")
-      err.println(language+": WARNING - file "+inFile+" does not exist")
-      return false
-    }
+    if (! inFile.exists)
+      throw new IllegalArgumentException(tag+": file "+inFile+" does not exist")
 
     var mapCount = 0
     destination.open()
-    //TODO FilterTarget???
+
     val ret = try {
-      readSortedQuads(language, inFile, FilterTarget.subject) { old =>
+      readSortedQuads(tag, inFile, target) { old =>
         destination.write(map(old))
         mapCount += old.size
       }
     }
     finally destination.close()
-    err.println(language+": mapped "+mapCount+" quads")
+    err.println(tag+": mapped "+mapCount+" quads")
+
+    ret
+  }
+
+  def mapSortedQuads(tag:String,
+                     leadFile: StreamSourceLike[_],
+                     files: Seq[StreamSourceLike[_]],
+                     target: FilterTarget.Value,
+                     destination: Destination)
+                    (map: Traversable[Quad] => Traversable[Quad]): Boolean = {
+
+    if (! leadFile.exists)
+      throw new IllegalArgumentException(tag+": file "+leadFile+" does not exist")
+
+    var mapCount = 0
+    destination.open()
+
+
+    val ret = try {
+      readSortedQuads(tag, leadFile, files, target) { old =>
+        destination.write(map(old))
+        mapCount += old.size
+      }
+    }
+    finally destination.close()
+    err.println(tag+": mapped "+mapCount+" quads")
+
+    ret
+  }
+
+  def mapSortedQuads(tag:String,
+                     files: Seq[StreamSourceLike[_]],
+                     target: FilterTarget.Value,
+                     destination: Destination)
+                    (map: Traversable[Quad] => Traversable[Quad]): Boolean = {
+
+    if (files.isEmpty || ! files.exists(f => f.exists))
+      throw new IllegalArgumentException(tag+": file " + files.head + " does not exist")
+
+    var mapCount = 0
+    destination.open()
+
+
+    val ret = try {
+      readSortedQuads(tag, files, target) { old =>
+        destination.write(map(old))
+        mapCount += old.size
+      }
+    }
+    finally destination.close()
+    err.println(tag+": mapped "+mapCount+" quads")
 
     ret
   }

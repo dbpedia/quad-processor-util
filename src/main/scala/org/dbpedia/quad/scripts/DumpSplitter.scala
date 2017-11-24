@@ -1,4 +1,4 @@
-package org.dbpedia.quad.split
+package org.dbpedia.quad.scripts
 
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap

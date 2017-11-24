@@ -86,7 +86,7 @@ class QuadReader(rec: LogRecorder[Quad]) {
     ret
   }
 
-  def readSortedQuads (tag:String, files: Seq[StreamSourceLike[_]], target: FilterTarget.Value)(proc: Traversable[Quad] => Unit): Unit = {
+  def readSortedQuads (tag:String, files: Seq[StreamSourceLike[_]], target: FilterTarget.Value)(proc: Traversable[Quad] => Unit): Boolean = {
     val readers = files.map(x => new QuadGroupReader(IOUtils.bufferedReader(x), target))
     val comp = new QuadComparator(target)
 
@@ -147,6 +147,7 @@ class QuadReader(rec: LogRecorder[Quad]) {
     }
     if(procParam.nonEmpty)
       proc(procParam)
+    true
   }
 
   /**

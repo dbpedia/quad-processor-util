@@ -70,7 +70,7 @@
 
                         <launcher>
                             <id>split-quad-file</id>
-                            <mainClass>org.dbpedia.quad.split.DumpSplitter</mainClass>
+                            <mainClass>org.dbpedia.quad.scripts.DumpSplitter</mainClass>
                             <args>
                                 <arg>dump-splitter.properties</arg>
                             </args>
