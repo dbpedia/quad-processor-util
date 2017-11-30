@@ -31,7 +31,7 @@ object SortedQuadTraversal{
 
     val test = new SortedQuadTraversal(config) {
       override def process(quads: Traversable[Quad]): Traversable[Quad] = {
-        if(quads.exists(q => q.predicate == "http://scigraph.springernature.com/ontologies/core/language")){
+        if(quads.exists(q => q.predicate == "http://www.springernature.com/scigraph/ontologies/core/abstract")){
           count += 1
           quads.map(q =>
             q.copy(subject = q.subject + "#test"))

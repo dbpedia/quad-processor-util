@@ -1,7 +1,9 @@
 package org.dbpedia.quad.processing
 
 import java.io.Closeable
-import java.util.concurrent.ArrayBlockingQueue
+import java.util.Comparator
+import java.util.concurrent.{ArrayBlockingQueue, PriorityBlockingQueue}
+import java.util.function.ToIntFunction
 
 import org.dbpedia.quad.Quad
 import org.dbpedia.quad.file.{BufferedLineReader, NoMoreLinesException}
@@ -23,7 +25,11 @@ class QuadGroupReader(val blr: BufferedLineReader, target: FilterTarget.Value, c
   def this(blr: BufferedLineReader) = this(blr, FilterTarget.subject, false)
 
   private val comparator = new CodePointComparator()
-  private val ne: ArrayBlockingQueue[Promise[Seq[Quad]]] = new ArrayBlockingQueue[Promise[Seq[Quad]]](QuadGroupReader.QUEUESIZE)
+  private val tupleComp = Comparator.comparingInt[Tuple2[Int, _]](new ToIntFunction[Tuple2[Int, _]] {
+    override def applyAsInt(t: Tuple2[Int, _]): Int = t._1
+  })
+  private val ne: PriorityBlockingQueue[(Int, Promise[Seq[Quad]])] = new PriorityBlockingQueue[(Int, Promise[Seq[Quad]])](QuadGroupReader.QUEUESIZE, tupleComp)
+  private var putCount = 0
 
   private val worker = PromisedWork.apply[String, Seq[Quad]]{ until: String =>
     val buffer = new ListBuffer[Quad]()
@@ -50,19 +56,22 @@ class QuadGroupReader(val blr: BufferedLineReader, target: FilterTarget.Value, c
             blr.setBackOneLine(stamp)
         case None =>
       }
-      buffer
     }
     finally{
       blr.unlockReader(stamp)
     }
+    buffer.foreach(b => System.out.println(buffer.hashCode() + " - " + b))
+    buffer
   }
 
   for(i <- 0 until QuadGroupReader.QUEUESIZE){
     try{
-        ne.put(worker.work(null.asInstanceOf[String]))
+        ne.put((putCount, worker.work(null.asInstanceOf[String])))
+        putCount = putCount+1
     }
     catch{
-      case e: Exception => ne.put(Promise.failed(e))
+      case e: Exception => ne.put((putCount, Promise.failed(e)))
+        putCount = putCount+1
     }
   }
 
@@ -112,17 +121,19 @@ class QuadGroupReader(val blr: BufferedLineReader, target: FilterTarget.Value, c
     if(ne.isEmpty)
       None
     else
-      Some(ne.peek())
+      Some(ne.peek()._2)
   }
 
   def linesRead(): Int = blr.getLineCount
 
   private def pollAndPut(): Promise[Seq[Quad]] = {
-    var ret = ne.poll()
-    ne.put(worker.work(null))
+    var ret = ne.poll()._2
+    ne.put((putCount, worker.work(null)))
+    putCount = putCount+1
     if(ret == null)
       ret = Promise.failed(new QueueEmptyException)
     Await.ready(ret.future, Duration.Inf)
+    //ret.future.map(x => x.foreach(b => System.out.println(b)))
     ret
   }
 
