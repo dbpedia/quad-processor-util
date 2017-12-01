@@ -10,7 +10,7 @@ import org.dbpedia.quad.utils.FilterTarget
 
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, Promise}
+import scala.concurrent.{Await, Future, Promise}
 import scala.languageFeature.implicitConversions
 import scala.util.{Failure, Success, Try}
 
@@ -70,8 +70,8 @@ class QuadReader(rec: LogRecorder[Quad]) {
       val futureQuads = for (worker <- readers)
         yield worker.readGroup(subj)
 
-      PromisedWork.waitPromises(futureQuads)
-      val otherGroupsQuads = futureQuads.map(x => x.future.value).map {
+      PromisedWork.awaitResults(futureQuads)
+      val otherGroupsQuads = futureQuads.map(x => x.value).map {
         case Some(s) => s match {
           case Success(su) => su
           case Failure(f) =>
@@ -80,7 +80,7 @@ class QuadReader(rec: LogRecorder[Quad]) {
         }
         case None => Seq()
       }
-      proc(otherGroupsQuads.flatten ++ quads)
+      proc(quads ++ otherGroupsQuads.flatten)
     }
     readers.foreach(_.close())
     ret
@@ -92,16 +92,16 @@ class QuadReader(rec: LogRecorder[Quad]) {
 
     this.getRecorder.initialize(tag, "reading quads")
 
-    var startup :List[(Promise[Seq[Quad]], QuadGroupReader)] = List()
+    var startup :List[(Future[Seq[Quad]], QuadGroupReader)] = List()
     for (reader <- readers)
       startup = startup ::: List((reader.readGroup(), reader))
 
-    PromisedWork.waitPromises(startup.map(x => x._1))
+    PromisedWork.awaitResults(startup.map(x => x._1))
 
     //TODO needs to be better safeguarded against Failures!
     var treeMap :List[(Seq[Quad], QuadGroupReader)] = startup.filter(p => PromisedWork.isCompletedSuccessfully(p._1))
-      .sortWith((x,y) => comp.compare(x._1.future.value.get.get.head, y._1.future.value.get.get.head) < 0)
-      .map(x => (x._1.future.value.getOrElse(Try{Seq()}).getOrElse(Seq()), x._2))
+      .sortWith((x,y) => comp.compare(x._1.value.get.get.head, y._1.value.get.get.head) < 0)
+      .map(x => (x._1.value.getOrElse(Try{Seq()}).getOrElse(Seq()), x._2))
 
     var procParam = new ListBuffer[Quad]()
 
@@ -126,8 +126,8 @@ class QuadReader(rec: LogRecorder[Quad]) {
 
       if(head._2.hasNext) {
         val next = (head._2.next(), head._2)
-        Await.ready(next._1.future, Duration.Inf)
-        val nextv = next._1.future.value.get match {
+        Await.ready(next._1, Duration.Inf)
+        val nextv = next._1.value.get match {
           case Success(s) => s
           case Failure(f) => f match{
             case n : NoMoreLinesException => Seq() //TODO
