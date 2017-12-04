@@ -2,7 +2,6 @@ package org.dbpedia.quad.processing
 
 import java.io.Closeable
 import java.util.Comparator
-import java.util.concurrent.PriorityBlockingQueue
 
 import org.dbpedia.quad.Quad
 import org.dbpedia.quad.file.{BufferedLineReader, NoMoreLinesException}
@@ -11,10 +10,8 @@ import org.dbpedia.quad.utils.FilterTarget
 
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, Future, Promise}
+import scala.concurrent.{Await, Future}
 import scala.util.{Failure, Success}
-
-import scala.concurrent.ExecutionContext.Implicits.global
 
 /**
   * Created by chile on 27.08.17.
@@ -26,6 +23,7 @@ class QuadGroupReader(val blr: BufferedLineReader, target: FilterTarget.Value, c
 
   private val comparator = new CodePointComparator()
   private val tupleComp = new Comparator[Future[Seq[Quad]]] {
+    var count = 0
     private def collectHead(f: Future[Seq[Quad]]): String ={
       f.value match{
         case Some(t) => t match {
@@ -37,20 +35,20 @@ class QuadGroupReader(val blr: BufferedLineReader, target: FilterTarget.Value, c
     }
     val codepointComp = new CodePointComparator()
     override def compare(t: Future[Seq[Quad]], t1: Future[Seq[Quad]]) = {
+      count = count +1
       PromisedWork.awaitResults(Seq(t,t1))
       val head1 = collectHead(t)
       val head2 = collectHead(t1)
       codepointComp.compare(head1, head2)
     }
   }
-  private val ne: PriorityBlockingQueue[Future[Seq[Quad]]] = new PriorityBlockingQueue[Future[Seq[Quad]]](QuadGroupReader.QUEUESIZE, tupleComp)
-
-  private def putInQueue(p: Promise[Seq[Quad]]): Unit = {
-    ne.put(p.future)
-  }
 
   private val worker = PromisedWork.apply[String, Seq[Quad]]{ until: String =>
     val buffer = new ListBuffer[Quad]()
+
+    if(!blr.hasMoreLines)
+      throw new NoMoreLinesException
+
     val stamp = blr.lockReader()
 
     try {
@@ -78,18 +76,10 @@ class QuadGroupReader(val blr: BufferedLineReader, target: FilterTarget.Value, c
     finally{
       blr.unlockReader(stamp)
     }
-    buffer.foreach(b => System.out.println(buffer.hashCode() + " - " + b))
     buffer
   }
 
-  for(i <- 0 until QuadGroupReader.QUEUESIZE){
-    try{
-      putInQueue(worker.work(null.asInstanceOf[String]))
-    }
-    catch{
-      case e: Exception => putInQueue(Promise.failed(e))
-    }
-  }
+  private var peek: Future[Seq[Quad]] = worker.work(null.asInstanceOf[String]).future
 
   def readGroup(): Future[Seq[Quad]] ={
     try {
@@ -109,23 +99,23 @@ class QuadGroupReader(val blr: BufferedLineReader, target: FilterTarget.Value, c
       }
       var compVal = resolvePromise(ret).headOption match{
         case Some(h) => comparator.compare(FilterTarget.resolveQuadResource(h, target), targetValue)
-        case None => -1
+        case None => 1
       }
       while (compVal < 0) {
-        pollAndPut()
+        pollAndPut()          //discard the current head (since it before the target values)
         ret = peekGroup() match{
           case Some(p) => p
           case None => Future.failed(new NoMoreLinesException)
         }
         compVal = resolvePromise(ret).headOption match{
           case Some(h) => comparator.compare(FilterTarget.resolveQuadResource(h, target), targetValue)
-          case None => -1
+          case None => 1
         }
       }
       if(compVal > 0)
         ret = Future.successful(Seq())     //we found no quad with the target value
       else
-        ret = pollAndPut()
+        ret = pollAndPut()                //
     }
     catch{
       case e: Exception => ret = Future.failed(e)
@@ -134,20 +124,14 @@ class QuadGroupReader(val blr: BufferedLineReader, target: FilterTarget.Value, c
   }
 
   def peekGroup(): Option[Future[Seq[Quad]]] = {
-    if(ne.isEmpty)
-      None
-    else{
-      Some(ne.peek())
-    }
+    Option(this.peek)
   }
 
   def linesRead(): Int = blr.getLineCount
 
   private def pollAndPut(): Future[Seq[Quad]] = {
-    val ret = ne.poll()
-    putInQueue(worker.work(null))
-    if(ret == null)
-      return Future.failed(new QueueEmptyException)
+    val ret = peek
+    this.peek = worker.work(null.asInstanceOf[String]).future
     Await.ready(ret, Duration.Inf)
     ret
   }

@@ -9,6 +9,7 @@ import scala.collection.convert.decorateAsScala._
 import org.dbpedia.quad.processing.Workers._
 import org.dbpedia.quad.utils.StringUtils
 
+import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.ExecutionContext.Implicits.global
 
 /**
@@ -26,10 +27,19 @@ object Workers {
     */
   private[processing] val defaultThreads = Runtime.getRuntime().availableProcessors()
 
+  def getWorker[T,R](proc: T => Future[R]): Worker[T,R] ={
+    new Worker[T, R]() {
+      private var state : WorkerState.Value = WorkerState.declared
+      def init() = {state = WorkerState.initialized}
+      def process(value: T)(implicit ec: ExecutionContext) = proc(value)
+      def destroy() = {state = WorkerState.destroyed}
+      def getState: org.dbpedia.quad.processing.WorkerState.Value = state
+    }
+  }
 
   def work[T, R](args: List[T])(proc: T => R): Unit = {
-    //val worker = SimpleWorkers(proc)
-    //Workers.work[T, R](worker, args, null)
+    val worker = new Workers(defaultThreads, defaultThreads, getWorker{v: T => Future{proc(v)}})
+    Workers.work[T, R](worker, args, null)
   }
 
   def work[T, R](worker: Workers[T, R], args: Seq[T], showProgress: String = null): Unit = {
@@ -88,7 +98,7 @@ object Workers {
   * @param queueLength  max length of work queue
   * @param factory      called during initialization of this class to create a worker for each thread
   */
-class Workers[T, R](availThreads: Int, queueLength: Int, factory: => Worker[T, R]) extends Closeable {
+class Workers[T, R](availThreads: Int, queueLength: Int, factory: Worker[T, R]) extends Closeable {
 
   /**
     * Provides the state of a package of work

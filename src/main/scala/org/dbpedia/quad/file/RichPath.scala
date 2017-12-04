@@ -48,7 +48,7 @@ object RichPath {
 
 class RichPath(path: Path) extends FileLike[Path] {
 
-  def this(path: String) = this(Paths.get(new URI(path)))
+  def this(path: String) = this(Paths.get(path))
   
   override def toString: String = path.toString
   

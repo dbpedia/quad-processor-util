@@ -8,7 +8,7 @@ import org.dbpedia.quad.utils.{FilterTarget, StringUtils}
 /**
   * Created by chile on 14.06.17.
   */
-class QuadComparator(val target: FilterTarget.Value, val prefixMap: PrefixMap = null, val initalPrefix:String = null)
+class QuadComparator(val target: FilterTarget.Value, val initalPrefix:String = null)
   extends Comparator[Quad] with Ordering[Quad] {
 
   private val stringComp: Comparator[String] = new CodePointComparator()
@@ -31,15 +31,11 @@ class QuadComparator(val target: FilterTarget.Value, val prefixMap: PrefixMap = 
     else{                                       //subtract the prefix and compare
       val zw1 = FilterTarget.resolveQuadResource(quad1, target)
       val zw2 = FilterTarget.resolveQuadResource(quad2, target)
-      if(prefixMap != null)
-        commonPrefix = prefixMap.resolvePrefix(initalPrefix, zw1).prefix
       if(commonPrefix.length > zw1.length || commonPrefix.length > zw2.length)
         throw new IllegalArgumentException("Prefix was longer than URI.")
       stringComp.compare(zw1.substring(commonPrefix.length), zw2.substring(commonPrefix.length))
     }
   }
-
-
 
   def getCommonPrefix: String = {
       commonPrefix

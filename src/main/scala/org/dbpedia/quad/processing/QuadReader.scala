@@ -74,9 +74,12 @@ class QuadReader(rec: LogRecorder[Quad]) {
       val otherGroupsQuads = futureQuads.map(x => x.value).map {
         case Some(s) => s match {
           case Success(su) => su
-          case Failure(f) =>
-            f.printStackTrace()
-            Seq()
+          case Failure(f) => f match {
+            case nml: NoMoreLinesException => Seq()
+            case _ =>
+              f.printStackTrace()
+              Seq()
+          }
         }
         case None => Seq()
       }

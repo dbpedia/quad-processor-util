@@ -18,8 +18,8 @@ class CodePointComparator extends Comparator[String] {
 
   override def compare(s1: String, s2: String): Int = {
     if (s1 == null && s2 == null) return 0
-    else if (s1 == null) return 1
-    else if (s2 == null) return -1
+    else if (s1 == null) return -1
+    else if (s2 == null) return 1
 
     val until = Math.min(s1.length, s2.length)
     for(i <- 0 until until){
