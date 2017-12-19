@@ -117,8 +117,8 @@ class QuadSorter(val target: FilterTarget.Value, val config: Config = Config.Uni
   }
 
   private def evaluatePrefixes(): Unit = {
-    val prefixes = prefixMap.keySet.toList.sortWith((p1, p2) => {codePointComp.compare(p1, p2) < 0})
-    val average = prefixMap.values.map(x => x.count).sum.toDouble / prefixMap.size.toDouble
+    val prefixes = prefixMap.keySet.asScala.toList.sortWith((p1, p2) => {codePointComp.compare(p1, p2) < 0})
+    val average = prefixMap.values.asScala.map(x => x.count).sum.toDouble / prefixMap.size.toDouble
 
     var fixPrefix = true
     var fixedPrefix: PrefixRecord = null
@@ -132,7 +132,7 @@ class QuadSorter(val target: FilterTarget.Value, val config: Config = Config.Uni
               case None => fixedPrefix.charMap.put(firstChar, prefixMap(prefixes(i)).charMap.values.sum)
             }
             //redirect unused prefixes
-            prefixMap += prefixes(i) -> new PrefixRecord(prefixes(i), prefixMap(prefixes(i)).index, mutable.Map[Char, Int](), Some(fixedPrefix.prefix))
+            prefixMap.put(prefixes(i), new PrefixRecord(prefixes(i), prefixMap(prefixes(i)).index, mutable.Map[Char, Int](), Some(fixedPrefix.prefix)))
           }
           fixPrefix = false
         }
@@ -145,19 +145,19 @@ class QuadSorter(val target: FilterTarget.Value, val config: Config = Config.Uni
       }
     }
 
-    while(prefixMap.nonEmpty && prefixMap.count(x => x._2.count > 0) < PromisedWork.defaultThreads){
-      val largest = prefixMap.maxBy(x => x._2.count)._2
+    while(prefixMap.asScala.nonEmpty && prefixMap.asScala.count(x => x._2.count > 0) < PromisedWork.defaultThreads){
+      val largest = prefixMap.asScala.maxBy(x => x._2.count)._2
       for(chr <- largest.charMap)
         prefixMap.addPrefix(largest.prefix + chr._1, mutable.Map[Char, Int](chr._1 -> chr._2))
 
       //empty largest and toggle split indicator
-      prefixMap += largest.prefix -> new PrefixRecord(largest.prefix, largest.index, mutable.Map[Char, Int](), None, split = true)
+      prefixMap.put(largest.prefix, new PrefixRecord(largest.prefix, largest.index, mutable.Map[Char, Int](), None, split = true))
 
     }
   }
 
   private def splitMergeResult(mr: MergeResult): List[MergeResult] ={
-    prefixMap.get(mr.longestPrefix) match{
+    Option(prefixMap(mr.longestPrefix)) match{
       case Some(p) if p.split =>
       case _ => throw new IllegalArgumentException("Attempt to split MergeResult with an undivided prefix. The prefix of this MergeResult has to be split beforehand (see def evaluatePrefixes).")
     }
@@ -302,9 +302,8 @@ class QuadSorter(val target: FilterTarget.Value, val config: Config = Config.Uni
   private def mergeTemporaryFiles(outFile: File, finalSize: Int): Unit = {
     val pfs = segmentMap.values.map(x => {
       val prefix = prefixMap.getPrefix(Integer.valueOf("prefix\\d+".r.findFirstIn(x.name).get.substring(6)))
-      val order = prefixMap.getPrefixOrder(prefix)
-      (order, prefix, x)
-    })
+      (prefix, x)
+    }).toList.sortWith((x,y) => codePointComp.compare(x._1, y._1) < 0).zipWithIndex
 
     val prefixGroups = pfs.groupBy(x => x._1)
 
@@ -324,7 +323,7 @@ class QuadSorter(val target: FilterTarget.Value, val config: Config = Config.Uni
       destination
     }
 
-    val finalPromise = finalMergeSinkWorker.work(prefixGroups.values.toList)
+    val finalPromise = finalMergeSinkWorker.work(prefixGroups.values.map(x => x.map(y => (y._2, y._1._1, y._1._2))).toList)
     val futureList = PromisedWork.waitPromises(finalPromise)
 
     PromisedWork.waitFutures(List(futureList.andThen {
@@ -389,7 +388,7 @@ class QuadSorter(val target: FilterTarget.Value, val config: Config = Config.Uni
     })
     buffer.clear()
 
-    var ret = (for(zz <- zw; px <- prefixMap.get(zz.longestPrefix)) yield {
+    var ret = (for(zz <- zw; px <- Option(prefixMap(zz.longestPrefix))) yield {
       if(px.redirect.isEmpty && prefixMap.isContainedIn(px.prefix).size > 1){
         zz.quads.groupBy(q => prefixMap.getLongestPrefix(FilterTarget.resolveQuadResource(q, target))).map(x => {
           //if(x._1 == zz.longestPrefix && !px.split)
@@ -400,8 +399,8 @@ class QuadSorter(val target: FilterTarget.Value, val config: Config = Config.Uni
     }).flatten
 
     //split all MergeResults which have a prefix which was split by def evaluatePrefixes
-    ret = zw.filter(x => prefixMap.get(x.longestPrefix).get.split).flatMap(x => splitMergeResult(x)) ++
-          zw.filterNot(x => prefixMap.get(x.longestPrefix).get.split)
+    ret = zw.filter(x => prefixMap.get(x.longestPrefix).split).flatMap(x => splitMergeResult(x)) ++
+          zw.filterNot(x => prefixMap.get(x.longestPrefix).split)
 
     //prefixMap.clearSplitPrefixes()
 
