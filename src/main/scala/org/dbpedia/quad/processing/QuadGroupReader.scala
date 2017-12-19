@@ -49,9 +49,6 @@ class QuadGroupReader(val blr: BufferedLineReader, target: FilterTarget.Value, c
     val stamp = blr.lockReader()
 
     try {
-      if(!blr.hasMoreLines)
-        throw new NoMoreLinesException
-
       var readerQuad: Option[Quad] = QuadGroupReader.readToQuad(blr, stamp)
       readerQuad match {
         case Some(x) =>
