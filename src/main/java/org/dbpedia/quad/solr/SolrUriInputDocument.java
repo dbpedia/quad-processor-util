@@ -52,7 +52,7 @@ public class SolrUriInputDocument implements KgSorlInputDocument {
 			return;
 		}
 		if(schema != null) {
-            SolrSchema.Field f = schema.getField(fieldName);
+            Field f = schema.getField(fieldName);
             if (f == null)
                 throw new IllegalArgumentException("The schema does not have a field called " + fieldName);
 
@@ -84,7 +84,7 @@ public class SolrUriInputDocument implements KgSorlInputDocument {
 		}
 
         if(schema != null) {
-            SolrSchema.Field f = schema.getField(fieldName);
+            Field f = schema.getField(fieldName);
             if (f == null)
                 throw new IllegalArgumentException("The schema does not have a field called " + fieldName);
 
