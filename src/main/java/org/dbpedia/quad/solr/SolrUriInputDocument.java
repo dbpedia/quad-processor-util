@@ -3,8 +3,8 @@ package org.dbpedia.quad.solr;
 
 import org.apache.solr.common.SolrInputDocument;
 
-import java.util.Collection;
-import java.util.Collections;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * This class can be used to create a SOLR document
@@ -51,8 +51,9 @@ public class SolrUriInputDocument implements KgSorlInputDocument {
 		if (null == fieldName || null == fieldData) {
 			return;
 		}
+		Field f = null;
 		if(schema != null) {
-            Field f = schema.getField(fieldName);
+            f = schema.getField(fieldName);
             if (f == null)
                 throw new IllegalArgumentException("The schema does not have a field called " + fieldName);
 
@@ -64,6 +65,8 @@ public class SolrUriInputDocument implements KgSorlInputDocument {
             if (this.solrDocument.getFieldValue(fieldName) != null)
                 throw new IllegalArgumentException("This field already has a value:" + fieldName);
         }
+		if(f != null && f.getType().equals("string") && testFieldSize(f, fieldData))
+			return;
 
 		this.solrDocument.addField(fieldName, fieldData, boost);
 	}
@@ -83,8 +86,9 @@ public class SolrUriInputDocument implements KgSorlInputDocument {
 			return;
 		}
 
-        if(schema != null) {
-            Field f = schema.getField(fieldName);
+		Field f = null;
+		if(schema != null) {
+            f = schema.getField(fieldName);
             if (f == null)
                 throw new IllegalArgumentException("The schema does not have a field called " + fieldName);
 
@@ -92,17 +96,34 @@ public class SolrUriInputDocument implements KgSorlInputDocument {
                 throw new IllegalArgumentException("This field is not defined as 'multivalued': " + fieldName);
         }
 
-		//for multivalued fields the boost should only be applied once, since lucene combines (by * or +) the boosts of each value into one
-        // see e.g. here: http://lucene.472066.n3.nabble.com/Index-time-Boosting-td474182.html
-		boolean boostApplied = false;
-		for (Object fieldData : fieldDataCollection) {
-		    if(boostApplied)
-                this.solrDocument.addField(fieldName, fieldData);
-		    else {
-                this.solrDocument.addField(fieldName, fieldData, boost);
-                boostApplied = true;
-            }
+        if(testFieldSize(f, fieldDataCollection))
+        	return;
+
+		ArrayList<Object> zw = new ArrayList<>(fieldDataCollection);
+		int size = zw.size();
+		while (testFieldSize(f, zw)) {
+			zw = new ArrayList<>(zw.subList(0, size));
+			size--;
 		}
+		this.solrDocument.addField(fieldName, zw, boost);
+	}
+
+	private boolean testFieldSize(Field f, Object fieldData) {
+		if(f != null && fieldData != null && f.getType().equals("string")){
+            int currentLength = 0;
+            if(fieldData instanceof Collection<?>)
+				currentLength = ((Collection<String>) fieldData).stream()
+                    .filter(Objects::nonNull)
+                    .map(x -> x.getBytes().length)
+                    .reduce((x,y) -> x+y)
+                    .orElse(0);
+            else
+            	currentLength = fieldData.toString().getBytes().length;
+            //fields of type string cant have more bytes!
+            if(currentLength > 32766)
+				return true;
+        }
+		return false;
 	}
 
 	public Object getFieldData(String fieldName){
@@ -121,6 +142,54 @@ public class SolrUriInputDocument implements KgSorlInputDocument {
 	public void addChildDocument(final KgSorlInputDocument doc) {
 		SolrInputDocument childDoc = doc.getSolrInputDocument();
 		this.solrDocument.addChildDocument(childDoc);
+	}
+
+
+
+	/**
+	 * This method can be used to return a value
+	 * as string
+	 *
+	 * @param fieldName
+	 * @return
+	 */
+	public String getFieldValueAsString(final String fieldName) {
+		if (null == fieldName || fieldName.isEmpty()) {
+			return null;
+		}
+
+		Object fieldValue = this.solrDocument.getFieldValue(fieldName);
+		if (null == fieldValue) {
+			return null;
+		}
+
+		return (String) fieldValue;
+	}
+
+	/**
+	 * This method can be used to return a value
+	 * as a list of strings
+	 *
+	 * @param fieldName
+	 * @return
+	 */
+	@SuppressWarnings("unchecked")
+	public List<String> getFieldValueAsStringList(final String fieldName) {
+		if (null == fieldName || fieldName.isEmpty()) {
+			return Collections.emptyList();
+		}
+
+		Object fieldValuesObject = this.solrDocument.getFieldValue(fieldName);
+		if (null != fieldValuesObject) {
+
+			if (fieldValuesObject instanceof List<?>) {
+				return (List<String>) fieldValuesObject;
+			}
+
+			return Arrays.asList(fieldValuesObject).stream().map(Object::toString).collect(Collectors.toList());
+		}
+
+		return Collections.emptyList();
 	}
 	
 	
