@@ -1,10 +1,9 @@
 package org.dbpedia.quad.file
 
 import java.io.{BufferedReader, IOException, Reader}
-import java.util.concurrent.locks.{ReentrantLock, StampedLock}
+import java.util.concurrent.locks.StampedLock
 import java.util.stream.Stream
 
-import scala.concurrent.Future
 import scala.util.{Failure, Success, Try}
 
 /**

@@ -191,12 +191,10 @@ class LogRecorder[T](
   def printLabeledLine(line:String, severity: RecordSeverity.Value, tag: String = null, print: Seq[PrinterDestination.Value] = null, noLabel: Boolean = false): Unit ={
     val tagi = if(tag != null) tag else defaulttag
     val printOptions = if(print == null) {
-      if(severity == RecordSeverity.Exception )
+      if(severity == RecordSeverity.Exception || severity == RecordSeverity.Warning )
         Seq(PrinterDestination.err, PrinterDestination.out, PrinterDestination.file)
-      else if(severity == RecordSeverity.Info)
-        Seq(PrinterDestination.out, PrinterDestination.file)
       else
-        Seq(PrinterDestination.file)
+        Seq(PrinterDestination.out, PrinterDestination.file)
     } else print
 
     val status = getStatusValues(tagi)
@@ -253,9 +251,6 @@ class LogRecorder[T](
   }
 
   def initialize(tag: String, task: String = "transformation", datasets: Seq[String] = Seq()): Unit ={
-    if(initialized)
-      return
-
     failedPageMap = Map[String, scala.collection.mutable.Map[(String, T), Throwable]]()
     successfulPagesMap = Map[String, scala.collection.mutable.Map[String, String]]()
     successfulPageCount = Map[String,AtomicLong]()
@@ -267,10 +262,6 @@ class LogRecorder[T](
 
     if(preamble != null)
       printLabeledLine(preamble, RecordSeverity.Info, tag)
-
-    val line = "Extraction started for tag: " + tag + " (" + tag + ")" + (if (datasets.nonEmpty) " on " + datasets.size + " datasets." else "")
-    printLabeledLine(line, RecordSeverity.Info, tag)
-    this.initialized = true
   }
 
   override def finalize(): Unit ={

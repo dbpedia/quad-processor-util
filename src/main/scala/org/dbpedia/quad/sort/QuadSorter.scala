@@ -2,16 +2,17 @@ package org.dbpedia.quad.sort
 
 import java.io.{File, FileNotFoundException}
 import java.nio.file.{Files, Paths}
-import java.util.Comparator
+import java.util.Date
 import java.util.concurrent.ConcurrentHashMap
 
 import org.dbpedia.quad.Quad
 import org.dbpedia.quad.config.Config
 import org.dbpedia.quad.destination.{Destination, FileDestination}
-import org.dbpedia.quad.file.{FileLike, IOUtils, RichFile}
+import org.dbpedia.quad.file._
+import org.dbpedia.quad.formatters.Formatter
 import org.dbpedia.quad.log.{LogRecorder, RecordSeverity}
 import org.dbpedia.quad.processing.{PromisedWork, QuadReader}
-import org.dbpedia.quad.sort.QuadSorter.{MergeResult, PrefixRecord}
+import org.dbpedia.quad.sort.QuadSorter._
 import org.dbpedia.quad.utils.{FilterTarget, StringUtils}
 
 import scala.collection.convert.decorateAsScala._
@@ -25,19 +26,19 @@ import scala.util.{Failure, Success}
 /**
   * Created by chile on 14.06.17.
   */
-class QuadSorter(val target: FilterTarget.Value, val config: Config = Config.UniversalConfig) {
+class QuadSorter(val config: QuadSorterConfig) {
 
   if(!config.dumpDir.exists)
     throw new FileNotFoundException("The provided base directory does not exist.")
   if(!config.dumpDir.getFile.canWrite)
     throw new FileNotFoundException("The provided base directory does not allow write access.")
 
+  private val target = config.target
   private val buffer: ListBuffer[Promise[List[MergeResult]]] = new ListBuffer[Promise[List[MergeResult]]]()
-  private val segmentMap = new mutable.HashMap[Int, RichFile]()
+  private val segmentMap = new mutable.HashMap[PrefixRecord, RichFile]()
   private var numberOfQuads = 0
-  private var numberOfSegments = 0
   private val tempFolder: File = Paths.get(config.dumpDir.getFile.getAbsolutePath, "tempsort").toFile
-  private val buckedMap: concurrent.Map[Int, ListBuffer[Quad]] = new ConcurrentHashMap[Int, ListBuffer[Quad]]().asScala
+  private val buckedMap: concurrent.Map[Int, Seq[Quad]] = new ConcurrentHashMap[Int, Seq[Quad]]().asScala
   private val prefixMap = new PrefixMap()
   private var startTime = System.currentTimeMillis()
   private var recorder: LogRecorder[Quad] = new LogRecorder[Quad]()
@@ -46,62 +47,70 @@ class QuadSorter(val target: FilterTarget.Value, val config: Config = Config.Uni
     case Some(s) => s
     case None => config.inputSuffix
   }
+  private val nameTemplate = config.outputNameTemplate
 
 
   /**
     * This worker does the initial compare of the most atomic segments (~100 Quads) using a simple sortWith
     */
   private val initialSorter = PromisedWork[List[Quad], List[MergeResult]](1.5, 1.5){ quads: List[Quad] =>
-
-    val comp = new QuadComparator(target)
-    val sorted = quads.sortWith((quad1, quad2) => {comp.compare(quad1, quad2) < 0})
-    val ret = if(sorted.nonEmpty)
-      for(m <- surveyPrefixes(sorted)) yield MergeResult(m._2, m._1)
-    else
-      List(MergeResult(new ListBuffer[Quad](), null))
+    // we need
+    val ret = for((prefix, quads) <- surveyPrefixes(quads))
+        yield MergeResult(quads, prefix)
+    assert(quads.size == ret.map(x => x.quads.size).sum)
     ret.toList
   }
 
-  private def surveyPrefixes(sorted: List[Quad]): Map[String, ListBuffer[Quad]] = synchronized{
+  private def surveyPrefixes(quads: List[Quad]): Map[String, Seq[Quad]] = synchronized{
     var map = Map[String, ListBuffer[Quad]]()
-    val comp = new CodePointComparator()
+    val comp = new QuadComparator(this.target)
+    val sorted = quads.sortWith((quad1, quad2) => {comp.compare(quad1, quad2) < 0})
+
+    if(sorted.isEmpty)
+      return Map[String, ListBuffer[Quad]]()
+    if(sorted.size == 1){
+      val resource = FilterTarget.resolveQuadResource(sorted.head, this.target)
+      return Map[String, ListBuffer[Quad]](Option(prefixMap.getLongestPrefix(resource)) match{
+        case Some(s) => s.prefix -> ListBuffer.apply(sorted.head)
+        case None => "" -> ListBuffer.apply(sorted.head)
+      } )
+    }
 
     for(i <- 1 until sorted.size){
       val resourcea = FilterTarget.resolveQuadResource(sorted(i-1), target)
       val resourceb = FilterTarget.resolveQuadResource(sorted(i), target)
-      var prefix = StringUtils.getLongestPrefix(resourcea, resourceb)
+      var pref = StringUtils.getLongestPrefix(resourcea, resourceb)
       val pathLength = Math.max(resourcea.lastIndexOf("/"), resourcea.lastIndexOf("#"))+1
-      if(pathLength > 0 && prefix.length > pathLength)
-        prefix = prefix.substring(0, pathLength)
-      if(prefix.length == resourcea.length || prefix.length == resourceb.length )
-        prefix = prefix.substring(0, prefix.length-1)
-      prefix = prefix.charAt(prefix.length-1) match{
-        case '/' | '#' => prefix
-        case _ => prefix.substring(0, Math.max(prefix.lastIndexOf("/"), prefix.lastIndexOf("#"))+1)
+      if(pathLength > 0 && pref.length > pathLength)
+        pref = pref.substring(0, pathLength)
+      if(pref.length == resourcea.length || pref.length == resourceb.length )
+        pref = pref.substring(0, pref.length-1)
+      pref = pref.charAt(pref.length-1) match{
+        case '/' | '#' => pref
+        case _ => pref.substring(0, Math.max(pref.lastIndexOf("/"), pref.lastIndexOf("#"))+1)
       }
-      map.get(prefix) match {
+      map.get(pref) match {
         case Some(l) =>
           if (i == sorted.size - 1)
-            l.append(sorted(i - 1), sorted(i))
+            l.asInstanceOf[ListBuffer[Quad]].append(sorted(i - 1), sorted(i))
           else
-            l.append(sorted(i - 1))
+            l.asInstanceOf[ListBuffer[Quad]].append(sorted(i - 1))
         case None =>
           val zw = new ListBuffer[Quad]()
           if (i == sorted.size - 1)
             zw.append(sorted(i - 1), sorted(i))
           else
             zw.append(sorted(i - 1))
-          map += prefix -> zw
+          map += pref -> zw
       }
     }
-    for(m <- map.filter(x => x._2.nonEmpty)) {
-      val charMap: mutable.Map[Char, Int] = extractCharMap(m._1, m._2)
-      prefixMap.addPrefix(m._1, charMap)
-    }
+    map.filter(x => x._2.nonEmpty).foreach(rec => {
+      prefixMap.addPrefix(rec._1, extractCharMap(rec._1, rec._2))
+    })
     map
   }
 
-  private def extractCharMap(prefix: String, quads: ListBuffer[Quad]) = {
+  private def extractCharMap(prefix: String, quads: Seq[Quad]) = {
     val charMap = mutable.Map[Char, Int]()
     for (quad <- quads) {
       val resource = FilterTarget.resolveQuadResource(quad, target)
@@ -152,7 +161,6 @@ class QuadSorter(val target: FilterTarget.Value, val config: Config = Config.Uni
 
       //empty largest and toggle split indicator
       prefixMap.put(largest.prefix, new PrefixRecord(largest.prefix, largest.index, mutable.Map[Char, Int](), None, split = true))
-
     }
   }
 
@@ -173,6 +181,10 @@ class QuadSorter(val target: FilterTarget.Value, val config: Config = Config.Uni
     * @return - the longest common prefix of all instances detected (if ignorePrefix != null it is equal to ignorePrefix)
     */
   def mergeQuads (mergees: List[MergeResult], sink: (Quad) => Unit) : String = {
+    if(mergees == null || mergees.isEmpty)
+      assert(false)
+    if(mergees.exists(m => m.longestPrefix != mergees.head.longestPrefix))
+      assert(false)
     val comp = new QuadComparator(target, mergees.head.longestPrefix)
     var treeMap :List[(Quad, List[Quad])] = List()
     for (i <- mergees.indices)
@@ -204,22 +216,22 @@ class QuadSorter(val target: FilterTarget.Value, val config: Config = Config.Uni
         List(MergeResult(new ListBuffer[Quad](), null))
       else if(mergees.size == 1)
         List(MergeResult(mergees.head.quads,
-          prefixMap.resolvePrefix(mergees.head.longestPrefix, FilterTarget.resolveQuadResource(mergees.head.quads.head, target)).prefix))
+          prefixMap.resolvePrefix(mergees.head.longestPrefix)(FilterTarget.resolveQuadResource(mergees.head.quads.head, target)).prefix))
       else{
         val prefix = mergees.head.longestPrefix
-        var ret = Map[String, ListBuffer[Quad]]()
+        var ret = Map[PrefixRecord, ListBuffer[Quad]]()
         mergeQuads(mergees, (q: Quad) => {
-          val actualPrefix = prefixMap.resolvePrefix(prefix, FilterTarget.resolveQuadResource(q, target))
-          ret.get(actualPrefix.prefix) match{
+          val actualPrefix = prefixMap.resolvePrefix(prefix)(FilterTarget.resolveQuadResource(q, target))
+          ret.get(actualPrefix) match{
             case Some(l) => l.append(q)
             case None =>{
               val lb = new ListBuffer[Quad]()
               lb.append(q)
-              ret += actualPrefix.prefix -> lb
+              ret += actualPrefix -> lb
             }
           }
         })
-        ret.map(x => MergeResult(x._2, x._1)).toList
+        ret.map(x => MergeResult(x._2, x._1.prefix)).toList
       }
     }
 
@@ -242,17 +254,24 @@ class QuadSorter(val target: FilterTarget.Value, val config: Config = Config.Uni
     * This will initialize the Quad merge sort with input files
     * @param inputFiles - the input files
     */
-  def sortFile(inputFiles: FileLike[_] *): Unit = {
+  def sort(inputFiles: StreamSourceLike[_] *): List[StreamSourceLike[_]] = {
     if(config == null)
       throw new IllegalArgumentException("Please initialize this class with a Config file.")
     tempFolder.mkdir()
 
+    val ret = new ListBuffer[StreamSourceLike[_]]()
+
     for(inputFile <- inputFiles) {
+      val inputName = (inputFile match{
+        case u:RichUrl => if(u.name.contains("/")) u.name.substring(u.name.lastIndexOf("/")+1) else u.name
+        case x:StreamSourceLike[_] => x.name
+      }).replace(config.inputSuffix, "")
+
       //init reader and recorder
       config.logDir match{
         case Some(dir) =>
-          this.recorder = new LogRecorder[Quad](IOUtils.writer(new RichFile(new File(dir, inputFile.name.replace(config.inputSuffix, "") + "-sorted.log"))))
-          this.recorder.initialize("", "sorting quads", Seq(inputFile.name))
+          this.recorder = new LogRecorder[Quad](IOUtils.writer(new RichFile(new File(dir, inputName + "-sorted.log"))))
+          this.recorder.initialize("", "sorting quads", Seq(inputName))
         case None =>
       }
 
@@ -262,9 +281,18 @@ class QuadSorter(val target: FilterTarget.Value, val config: Config = Config.Uni
       //clear temporary entries of other files
       segmentMap.clear()
       var fileQuadSize = 0
-      val outFile =new File(config.dumpDir.getFile, inputFile.name.replace(config.inputSuffix, "") + "-sorted" + outputSuffix)
-      val targetSize = QuadSorter.calculateSegmentSize(inputFile)
+      val outFile = nameTemplate match{
+        case Some((regex, replacement)) => new File(config.dumpDir.getFile, inputName.replaceAll(regex, replacement) + outputSuffix)
+        case None => new File(config.dumpDir.getFile, inputName + "-sorted" + outputSuffix)
+      }
+
+      val targetSize = inputFile match{
+        case f: RichFile => MAXMEMUSAGE
+        case _ => MAXMEMUSAGE   //TODO
+      }
+
       var fileFinished = false
+      this.recorder.printLabeledLine("First pass: reading input file in processable chunks.", RecordSeverity.Info)
 
       while(!fileFinished) {
         numberOfQuads = 0
@@ -287,65 +315,88 @@ class QuadSorter(val target: FilterTarget.Value, val config: Config = Config.Uni
         sortBuffer()
         fileQuadSize += numberOfQuads
 
-        writeCompressedFile(inputFile.name + fileQuadSize)
-        this.recorder.printLabeledLine("Finished writing part-files, moving on to the next section.", RecordSeverity.Info)
+        writeCompressedFile(inputName + fileQuadSize)
+        if(!fileFinished)
+          this.recorder.printLabeledLine("Finished writing part-files, moving on to the next section.", RecordSeverity.Info)
       }
 
-      this.recorder.printLabeledLine("Merging all part-files to produce final, sorted {dataset}", RecordSeverity.Info)
-      mergeTemporaryFiles(outFile, fileQuadSize)
+      this.recorder.printLabeledLine("Finished first pass of " + numberOfQuads + " triples.", RecordSeverity.Warning)
 
-      this.recorder.printLabeledLine("Sorting of {pages} quads completed after {time} for: {dataset}", RecordSeverity.Info)
+      this.recorder.printLabeledLine("Second pass: merging all part-files to produce final, sorted file", RecordSeverity.Info)
+      val metadata = new StreamSourceMetaData(inputFile.name, fileQuadSize, config.getFormatter.get.serialization, new Date(), Array(this.target + "-sorted"))
+      mergeTemporaryFiles(outFile, metadata)
+
+      recorder.printLabeledLine("Sorting of {pages} quads completed after {time} for: {dataset}", RecordSeverity.Info)
+      recorder.printLabeledLine("Finished sorting file " + outFile, RecordSeverity.Warning)
+      ret.append(new RichFile(outFile))
     }
-    Files.delete(tempFolder.toPath)
+    if(tempFolder.listFiles().isEmpty)
+      Files.delete(tempFolder.toPath)
+    ret.toList
   }
 
-  private def mergeTemporaryFiles(outFile: File, finalSize: Int): Unit = {
-    val pfs = segmentMap.values.map(x => {
-      val prefix = prefixMap.getPrefix(Integer.valueOf("prefix\\d+".r.findFirstIn(x.name).get.substring(6)))
-      (prefix, x)
-    }).toList.sortWith((x,y) => codePointComp.compare(x._1, y._1) < 0).zipWithIndex
+  private val finalReader = new QuadReader(this.recorder)
+  private val finalMergeSinkWorker = PromisedWork[FinalMergeWorkerParams, (PrefixRecord, FileDestination)](1.5, 1.5) { params: FinalMergeWorkerParams =>
+    val prefix = params.prefix.prefix
 
-    val prefixGroups = pfs.groupBy(x => x._1)
-
-    val finalMergeSinkWorker = PromisedWork[Iterable[(Int, String, RichFile)], FileDestination](1.5, 1.5) { input: Iterable[(Int, String, RichFile)] =>
-      val destination = if(prefixGroups.size == 1)
-        getPureDestination(outFile.getName, 0)
-      else {
-        val tempNumber = org.apache.commons.lang3.StringUtils.leftPad(String.valueOf(input.head._1), 5, '0')
-        getPureDestination(outFile.getName.replace(outputSuffix, "") + "-final-temp-" + tempNumber + outputSuffix, input.head._1)
+    params.destination.open()
+    //skip if empty but write empty files
+    if(params.input.nonEmpty)
+      this.finalReader.readSortedQuads("", params.input.toSeq, this.target, prefix) { quads =>
+        params.destination.write(quads)
       }
-
-      destination.open()
-      new QuadReader(recorder).readSortedQuads("Merging part-files for prefix: " + input.head._2, input.map(x => x._3).toSeq, target) { quads =>
-        destination.write(quads)
-      }
-      destination.close()
-      destination
-    }
-
-    val finalPromise = finalMergeSinkWorker.work(prefixGroups.values.map(x => x.map(y => (y._2, y._1._1, y._1._2))).toList)
-    val futureList = PromisedWork.waitPromises(finalPromise)
-
-    PromisedWork.waitFutures(List(futureList.andThen {
-      case Success(fileList) =>
-        if (prefixGroups.size > 1) {
-          val headerFooter = createHeaderFooter(finalSize)
-          val temFiles = fileList.toList.sortWith((x, y) => codePointComp.compare(x.file.getName, y.file.getName) < 0).map(x => x.richFile)
-          val files: List[FileLike[_]] = List(headerFooter._1) ::: temFiles ::: List(headerFooter._2)
-          if (!IOUtils.concatFile(files, new RichFile(outFile)))
-            throw new RuntimeException("Concatenating temporary files failed!")
-          files.foreach(x => Files.delete(x.getFile.toPath))
-        }
-      case Failure(f) => throw new RuntimeException("Writing the output file failed: " + f.getMessage)
-    }))
-    for(tempFile <- segmentMap.values)
-      Files.delete(tempFile.getFile.toPath)
+    params.destination.close()
+    (params.prefix, params.destination)
   }
 
-  private def createHeaderFooter(finalSize: Int) ={
+  private def mergeTemporaryFiles(outFile: File, metadata: StreamSourceMetaData): Unit = {
+
+    val prefixGroups = segmentMap.toList
+      .sortWith((x,y) => codePointComp.compare(x._1.prefix, y._1.prefix) < 0)
+      .map(x => (prefixMap.resolvePrefix(x._1.prefix)(x._1.prefix), x._2))
+      .groupBy(x => x._1.index)
+
+    val finalMergeWorkerParams = prefixGroups.values.map(g =>
+      FinalMergeWorkerParams(
+        if(prefixGroups.size == 1)
+          getPureDestination(outFile.getName, 0)
+        else {
+          val tempNumber = org.apache.commons.lang3.StringUtils.leftPad(String.valueOf(g.head._1.index), 5, '0')
+          getPureDestination(outFile.getName.replace(outputSuffix, "") + "-final-temp-" + tempNumber + outputSuffix, g.head._1.index)
+        },
+        g.head._1,
+        g.map(x => x._2)
+      ))
+
+    var fileList: List[(PrefixRecord, FileDestination)] = List()
+    //finalMergeWorkerParams.foreach(params => {
+      val finalPromise = finalMergeSinkWorker.work(finalMergeWorkerParams.toList)
+      val futureList = PromisedWork.waitPromises(finalPromise)
+      PromisedWork.waitFutures(List(futureList.andThen {
+        case Success(files) => fileList = fileList ::: files.toList
+        case Failure(f) => throw new RuntimeException("Writing the output file failed: " + f.getMessage)
+      }))
+    //})
+
+    val (header, footer) = createHeaderFooter(metadata)
+
+    val files = List(header) :::
+      fileList.sortWith((x, y) => codePointComp.compare(x._1.prefix, y._1.prefix) < 0).map(x => x._2.richFile) :::
+      List(footer)
+
+    if (!IOUtils.concatFile(files, new RichFile(outFile), Some(tempFolder)))
+      throw new RuntimeException("Concatenating temporary files failed!")
+
+    files.foreach(f => Files.delete(f.getFile.toPath))
+    segmentMap.values.foreach(f => Files.delete(f.getFile.toPath))
+  }
+
+  private def createHeaderFooter(metadata: StreamSourceMetaData) ={
     val headerFile = new RichFile(new File(tempFolder, "headerFile" + outputSuffix))
     val hWriter = IOUtils.writer(headerFile)
-    hWriter.append("#RDF properties: " + finalSize + " quads, sorted by " + this.target + ", " + config.getFormatter.get.serialization + " serialization\n")
+    hWriter.append("# ")
+    hWriter.append(metadata.toString)
+    hWriter.append("\n")
     hWriter.close()
     val footerFile = new RichFile(new File(tempFolder, "footerFile" + outputSuffix))
     val fWriter = IOUtils.writer(footerFile)
@@ -382,28 +433,33 @@ class QuadSorter(val target: FilterTarget.Value, val config: Config = Config.Uni
     val zw = buffer.toList.flatMap(x => x.future.value match{
       case Some(l) => l match{
         case Success(s) => s
-        case Failure(f) => List(MergeResult(new ListBuffer[Quad](), null))
+        case Failure(f) =>
+          recorder.printLabeledLine("Error while merging: " + f.getMessage, RecordSeverity.Exception)
+          List(MergeResult(new ListBuffer[Quad](), null))
       }
       case None => List(MergeResult(new ListBuffer[Quad](), null))
     })
+    assert(zw.map(m => m.quads.size).sum == numberOfQuads, "" + zw.map(m => m.quads.size).sum + " - " + numberOfQuads)
     buffer.clear()
 
     var ret = (for(zz <- zw; px <- Option(prefixMap(zz.longestPrefix))) yield {
       if(px.redirect.isEmpty && prefixMap.isContainedIn(px.prefix).size > 1){
-        zz.quads.groupBy(q => prefixMap.getLongestPrefix(FilterTarget.resolveQuadResource(q, target))).map(x => {
-          //if(x._1 == zz.longestPrefix && !px.split)
-          //  px.toggleSplit()
-          MergeResult(x._2, x._1)}).toList
+        zz.quads.groupBy(q => prefixMap.getLongestPrefix(FilterTarget.resolveQuadResource(q, target), px.prefix)).map(x => {
+          if(x == null || x._1 == null)
+            assert(false)
+          MergeResult(x._2, x._1.prefix)
+        }).toList
       }
       else List(zz)
     }).flatten
 
+    assert(ret.map(m => m.quads.size).sum == numberOfQuads, "" + ret.map(m => m.quads.size).sum + " - " + numberOfQuads)
     //split all MergeResults which have a prefix which was split by def evaluatePrefixes
-    ret = zw.filter(x => prefixMap.get(x.longestPrefix).split).flatMap(x => splitMergeResult(x)) ++
-          zw.filterNot(x => prefixMap.get(x.longestPrefix).split)
+    ret = zw.filter(x => prefixMap.get(x.longestPrefix).split)
+      .flatMap(x => splitMergeResult(x)) ++
+      zw.filterNot(x => prefixMap.get(x.longestPrefix).split)
 
-    //prefixMap.clearSplitPrefixes()
-
+    assert(ret.map(m => m.quads.size).sum == numberOfQuads, "" + ret.map(m => m.quads.size).sum + " - " + numberOfQuads)
     //group by prefix and sort out empty results
     ret.groupBy(x => x.longestPrefix).filter(x => x._2.nonEmpty && x._1 != null)
   }
@@ -417,8 +473,8 @@ class QuadSorter(val target: FilterTarget.Value, val config: Config = Config.Uni
     //get the content of the current buffer and clear it for the next merge
     val bins = copyAndClearBuffer()
     val count = bins.values.flatten.map(x => x.quads.size).sum
+    assert(numberOfQuads == count, "Amount of triples in sorted buckets did not match the input size!")
     this.recorder.printLabeledLine("Sorting and merging " + count + " quads into temporary file.", RecordSeverity.Info)
-    assert(numberOfQuads == bins.values.map(x => x.map(y => y.quads.size).sum).sum, "Amount of triples in sorted buckets did not match the input size!")
 
     //calculate the partitioning of the first merge
     //here we calculate the best distribution of prepared bins to so we will have X² bins after the first merge run
@@ -530,38 +586,43 @@ class QuadSorter(val target: FilterTarget.Value, val config: Config = Config.Uni
 
     //create a worker for each writer and feet it with the sorted bucket
     var writerCount = 0
-    val destinations = new ListBuffer[FileDestination]()
-    val writerPromise= for(dest <- 1 to buckedMap.size) yield {
-      val fileName = fnt + "-%s-num" + writerCount + ".nt"
-      val prefix = buckedMap(dest).headOption match{
-        case Some(q) => prefixMap.getPrefixIndex(prefixMap.getLongestPrefix(FilterTarget.resolveQuadResource(q, this.target)))
-        case None => 0
-      }
-      val destination = getPureDestination(fileName, prefix)
-      val worker = simpleSinkWorker((q: Traversable[Quad]) => destination.write(q))
-      destinations.append(destination)
-      writerCount += 1
-      worker.work(buckedMap(dest).toIterator)
-    }
+    val destinations = new ListBuffer[(PrefixRecord, FileDestination)]()
 
-    //wait and close writers
-    PromisedWork.waitPromises(writerPromise)
-    destinations.foreach(_.close())
+    val bucketPartitions = buckedMap.toList.grouped(500)
+
+    bucketPartitions.foreach {bb =>
+      val buckets = bb.toMap
+      val writerPromise = for (dest <- buckets.values) yield {
+        val fileName = fnt + "-%s-num" + writerCount + ".nt"
+        val prefix = prefixMap.getLongestPrefix(FilterTarget.resolveQuadResource(dest.head, this.target))
+        val destination = getPureDestination(fileName, prefix.index)
+        val worker = simpleSinkWorker((q: Traversable[Quad]) => destination.write(q))
+        destination.open()
+        destinations.append((prefix, destination))
+        writerCount += 1
+        worker.work(dest.iterator).future.andThen{case _ => destination.close()}
+      }
+
+      //wait and close writers
+      PromisedWork.waitFutures(writerPromise.toSeq)
+    }
 
     //group by prefixes (as tag) and concat output files
-    for(prefixGroup <- destinations.groupBy(x => x.getTag)){
-      val tempNumber = org.apache.commons.lang3.StringUtils.leftPad(String.valueOf(numberOfSegments), 5, '0')
-      val outFile = new RichFile(new File(tempFolder, fnt + "-" + prefixGroup._1 + "-temp" + tempNumber + ".nt"))
+    for(prefixGroup <- destinations.groupBy(x => x._1)){
+      val tempNumber = org.apache.commons.lang3.StringUtils.leftPad(String.valueOf(segmentMap.size), 5, '0')
+      val outFile = new RichFile(new File(tempFolder, fnt + "-" + prefixGroup._1.index + "-temp" + tempNumber + ".nt"))
       outFile.getFile.createNewFile()
-      segmentMap.put(numberOfSegments, outFile)
+      segmentMap.put(prefixGroup._1, outFile)
 
       //concatenate the temp files to the result file (use only non negative key - negative entries are fo split files)
-      if(false == IOUtils.concatFile(prefixGroup._2.toList.sortBy(x => x.file.getName).map( x => new RichFile(x.file)), outFile))
-        throw new RuntimeException("Concatenating temporary files failed!")
+      val fileList = prefixGroup._2.map(x => x._2).toList
+        .sortBy(x => x.file.getName)
+        .map( x => new RichFile(x.file))
 
-      numberOfSegments += 1
+      if(! IOUtils.concatFile(fileList, outFile, Some(tempFolder)))
+        throw new RuntimeException("Concatenating temporary files failed!")
     }
-    destinations.foreach(x => x.file.delete())
+    destinations.foreach(x => Files.delete(x._2.file.toPath))
   }
 
   private def getPureDestination(file: String, prefix: Int): FileDestination ={
@@ -569,12 +630,11 @@ class QuadSorter(val target: FilterTarget.Value, val config: Config = Config.Uni
     val destination = new FileDestination(new File(tempFolder, String.format(file, "prefix" + prefixNumber)), config.getFormatter.get)
     destination.setHeader("")
     destination.setFooter("")
-    destination.setTag("prefix" + prefixNumber)
-    destination.open()
+    destination.setTag(prefixNumber)
     destination
   }
 
-  /**
+  /**F
     * write to a given destination (could be a file)
     * @param destination - the destination
     * @return
@@ -601,7 +661,7 @@ class QuadSorter(val target: FilterTarget.Value, val config: Config = Config.Uni
 object QuadSorter{
 
   private val INITIALBUCKETSIZE = 100
-  private val MAXMEMUSAGE = 1000000000l
+  private val MAXMEMUSAGE = 200000000
 
   private val BestThreadTargets = for(i <- 0 to 20)
     yield Math.pow(PromisedWork.defaultThreads, i).toLong
@@ -648,11 +708,11 @@ object QuadSorter{
 
 
   /**
-    * If fileSize exceeds heap space, fragment the file into x segments á y bytes
+    * If fileSize exceeds heap space, fragment the file into x segments á y bytesA
     * @param file the file
     * @return number of fragment to split in
     */
-  def calculateSegmentSize(file: FileLike[_]): Long ={
+  def calculateSegmentSize(file: RichFile): Long ={
     val length = file.getFile.length()
     val fileCompressionFactor = IOUtils.estimateCompressionRatio(file)
     val presumableFreeMemory = (Runtime.getRuntime.maxMemory - (Runtime.getRuntime.totalMemory()-Runtime.getRuntime.freeMemory)) * 0.6
@@ -667,22 +727,41 @@ object QuadSorter{
   def main(args: Array[String]): Unit ={
     assert(args.length > 0, "Please provide a properties file.")
     val config = new Config(args.head)
-
-    val target = FilterTarget.subject
     val inputFiles = config.inputDatasets.map(in => new RichFile(new File(config.dumpDir.getFile, in + config.inputSuffix)))
+    val sorterConfig = QuadSorterConfig(FilterTarget.subject, config.dumpDir, config.getFormatter, config.inputSuffix, config.outputSuffix, None, config.logDir)
 
-    val sorter = new QuadSorter(target, config)
-    sorter.sortFile(inputFiles: _*)
+    val sorter = new QuadSorter(sorterConfig)
+    sorter.sort(inputFiles: _*)
 
     PromisedWork.shutdownExecutor()
   }
 
-  case class MergeResult(quads: ListBuffer[Quad], longestPrefix: String )
+  case class FinalMergeWorkerParams(destination: FileDestination, prefix: PrefixRecord, input: Iterable[RichFile])
+  case class MergeResult(quads: Seq[Quad], longestPrefix: String )
   case class BinDistribution(partitioning: List[(Int, Int)])
-  class PrefixRecord(val prefix: String, val index: Int, val charMap: mutable.Map[Char, Int], val redirect: Option[String] = None, var split: Boolean = false){
+  case class QuadSorterConfig(
+     target: FilterTarget.Value,
+     dumpDir: RichFile,
+     getFormatter: Option[Formatter],
+     inputSuffix: String,
+     outputSuffix: Option[String] = None,
+     outputNameTemplate: Option[(String, String)] = None,
+     logDir: Option[File] = None
+   )
+
+  class PrefixRecord(
+    val prefix: String,
+    val index: Int,
+    val charMap: mutable.Map[Char, Int],
+    val redirect: Option[String] = None,
+    var split: Boolean = false){
 
     def count: Int = charMap.values.sum
 
     def toggleSplit() = if(charMap.nonEmpty) split = !split else throw new IllegalStateException("Trying to split an empty CharPrefixMap!")
+
+    override def hashCode(): Int = this.index
+
+    override def toString: String = this.prefix
   }
 }

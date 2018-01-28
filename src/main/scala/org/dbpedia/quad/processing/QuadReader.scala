@@ -10,7 +10,7 @@ import org.dbpedia.quad.utils.FilterTarget
 
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, Future, Promise}
+import scala.concurrent.{Await, Future}
 import scala.languageFeature.implicitConversions
 import scala.util.{Failure, Success, Try}
 
@@ -89,9 +89,9 @@ class QuadReader(rec: LogRecorder[Quad]) {
     ret
   }
 
-  def readSortedQuads (tag:String, files: Seq[StreamSourceLike[_]], target: FilterTarget.Value)(proc: Traversable[Quad] => Unit): Boolean = {
+  def readSortedQuads (tag:String, files: Seq[StreamSourceLike[_]], target: FilterTarget.Value, knownPrefix: String = null)(proc: Traversable[Quad] => Unit): Boolean = {
     val readers = files.map(x => new QuadGroupReader(IOUtils.bufferedReader(x), target))
-    val comp = new QuadComparator(target)
+    val comp = new QuadComparator(target, knownPrefix)
 
     this.getRecorder.initialize(tag, "reading quads")
 
@@ -150,6 +150,8 @@ class QuadReader(rec: LogRecorder[Quad]) {
     }
     if(procParam.nonEmpty)
       proc(procParam)
+
+    readers.foreach(_.close())
     true
   }
 
@@ -159,12 +161,8 @@ class QuadReader(rec: LogRecorder[Quad]) {
    * @param proc process quad
    */
   def readQuads(tag: String, file: StreamSourceLike[_], until: Long = -1l)(proc: Quad => Unit): Boolean = {
-    val dataset = "(?<=(.*wiki-\\d{8}-))([^\\.]+)".r.findFirstIn(file.toString) match {
-      case Some(x) => Seq(x)
-      case None => Seq()
-    }
     if(until < 0 || this.reader == null)
-      getRecorder.initialize(tag, "reading quads", dataset)
+      getRecorder.initialize(tag, "reading quads", Seq(file.name))
 
     this.reader = if(until > 0 && this.reader != null) this.reader else IOUtils.bufferedReader(file)
     this.file = if(until > 0 && this.reader != null) this.file else file
@@ -175,11 +173,8 @@ class QuadReader(rec: LogRecorder[Quad]) {
         line match {
           case null => // ignore last value
           case Quad(quad) =>
-            val copy = quad.copy (
-              dataset = if(dataset.nonEmpty) dataset.head else null
-            )
-            proc(copy)
-            addQuadRecord(copy, tag)
+            proc(quad)
+            addQuadRecord(quad, tag)
           case str => if (str.nonEmpty && !str.startsWith("#"))
             addQuadRecord(null, tag, null, new IllegalArgumentException("line did not match quad or triple syntax: " + line))
         }

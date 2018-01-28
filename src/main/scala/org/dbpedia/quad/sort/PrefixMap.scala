@@ -4,11 +4,8 @@ import java.util.Comparator
 
 import org.apache.commons.collections4.trie.PatriciaTrie
 import org.dbpedia.quad.sort.QuadSorter.PrefixRecord
-import org.dbpedia.quad.utils.StringUtils
 
 import scala.collection.mutable
-
-
 import scala.collection.convert.decorateAsScala._
 
 /**
@@ -21,13 +18,13 @@ class PrefixMap extends PatriciaTrie[PrefixRecord] {
 
   def addPrefix(prefix: String, charMap: mutable.Map[Char, Int], redirect: Option[String] = None, split: Boolean = false): Unit = synchronized {
     if(!this.keySet.contains(prefix))
-      this.put(prefix, new PrefixRecord(prefix, this.size, charMap))
+      this.put(prefix, new PrefixRecord(prefix, this.size, charMap, redirect, split))
     else{
       val old = this.get(prefix)
-      for(oc <- old.charMap){
-        charMap.get(oc._1) match{
-          case Some(i) => charMap.put(oc._1, oc._2 + i)
-          case None => charMap.put(oc._1, oc._2)
+      for((key, value) <- old.charMap){
+        charMap.get(key) match{
+          case Some(i) => charMap.put(key, value + i)
+          case None => charMap.put(key, value)
         }
       }
       this.put(prefix, new PrefixRecord(prefix, old.index, charMap, redirect, split))
@@ -41,29 +38,46 @@ class PrefixMap extends PatriciaTrie[PrefixRecord] {
     }
   }
 
-
   def getPrefixIndex(prefix: String): Int = Option(this.get(prefix)) match{
     case Some(x) => x.index+1
     case None => 0
   }
 
-  def getLongestPrefix(uri: String): String ={
-    this.selectKey(uri)
+  def getLongestPrefix(uri: String, skip: String = null): PrefixRecord ={
+    var currentPrefix = if(skip != null) skip else ""
+    if(skip == null){
+      while(this.get(currentPrefix) == null && currentPrefix.length < uri.length)
+        currentPrefix = uri.substring(0, currentPrefix.length+1)
+    }
+    var record: PrefixRecord = this.get(currentPrefix)
+    while(record == null || record.split){
+      currentPrefix = uri.substring(0, currentPrefix.length+1)
+      record = this.get(currentPrefix)
+    }
+    record
   }
 
   def isContainedIn(prefix: String): List[PrefixRecord]={
-    this.asScala.filter(x => x._2.redirect.isEmpty && !x._2.split && StringUtils.getLongestPrefix(x._1, prefix) == prefix).values.toList
+    this.headMap(prefix).asScala.filter(x => x._2.redirect.isEmpty && !x._2.split).values.toList
   }
 
   /**
     * redirects prefixes if necessary
     * @param prefix
     */
-  def resolvePrefix(prefix: String, resource: String): PrefixRecord ={
+  def resolvePrefix(prefix: String): (String) => PrefixRecord ={
     Option(this.get(prefix)) match{
       case Some(p) => p.redirect match{
-        case Some(r) => resolvePrefix(r, resource)
-        case None => if(p.split) resolvePrefix(prefix + resource.trim.substring(prefix.length, prefix.length+1), resource) else p
+        case Some(r) => resolvePrefix(r)
+        case None => if(p.split)
+          (resource: String) => {
+            if(!resource.startsWith(p.prefix))
+              throw new IllegalArgumentException("Incompatible resource provided: " + resource + " for prefix " + p.prefix)
+            val newPrefix = p.prefix + resource.substring(p.prefix.length, p.prefix.length+1)
+            this.get(newPrefix)
+          }
+          else
+            (_: String) => p
       }
       case None => throw new IllegalStateException("Prefix was not found: " + prefix)  //should not happen
     }

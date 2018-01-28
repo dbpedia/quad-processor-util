@@ -1,8 +1,8 @@
 package org.dbpedia.quad.file
 
 import java.io._
-import java.net.URL
 import java.nio.charset.Charset
+import java.nio.file.Files
 import java.util.zip.{GZIPInputStream, GZIPOutputStream, Inflater, InflaterInputStream}
 
 import org.apache.commons.compress.compressors.bzip2.{BZip2CompressorInputStream, BZip2CompressorOutputStream}
@@ -78,12 +78,45 @@ object IOUtils {
     1000000/compressedBytes
   }
 
+
   /**
     * a simple concatenation of files with bash - cat also allows for concatenating compressed files
     * @param files
     * @param outFile
     */
-  def concatFile(files: Seq[FileLike[_]], outFile: FileLike[_]): Boolean = {
+  def concatFile(files: Seq[FileLike[_]], outFile: FileLike[_], tempDirectory: Option[File] = None): Boolean = {
+    if(files.size > 100){
+      var c = 0
+      val tempDir = tempDirectory match{
+        case Some(d) => d
+        case None => new File(outFile.toString.substring(0, outFile.toString.lastIndexOf("/")+1))
+      }
+      if(! tempDir.exists)
+        throw new IllegalArgumentException("The following directory does not exist: " + tempDir)
+      val tempFiles = for(tf <- files.grouped(100))
+        yield {
+          c = c+1
+          val tmpFile = new RichFile(new File(tempDir, "cat" + c + ".tmp"))
+          concatFileInternal(tf, tmpFile)
+          tmpFile
+        }
+      val ret = concatFileInternal(tempFiles.toSeq, outFile)
+      tempFiles.foreach(f => {
+        f.getFile.setWritable(true)
+        f.delete()
+      })
+      ret
+    }
+    else
+      concatFileInternal(files, outFile)
+  }
+
+  /**
+    * a simple concatenation of files with bash - cat also allows for concatenating compressed files
+    * @param files
+    * @param outFile
+    */
+  private def concatFileInternal(files: Seq[FileLike[_]], outFile: FileLike[_]): Boolean = {
     var command = "cat "
     for(i <- files.indices)
       command += files(i).getFile.getAbsolutePath + " "

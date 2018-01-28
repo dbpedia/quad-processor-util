@@ -12,12 +12,13 @@ class QuadComparator(val target: FilterTarget.Value, val initalPrefix:String = n
   extends Comparator[Quad] with Ordering[Quad] {
 
   private val stringComp: Comparator[String] = new CodePointComparator()
-  private var commonPrefix: String = if(initalPrefix != null) initalPrefix else ""
+  private var commonPrefix: String = initalPrefix
 
   override def compare(quad1: Quad, quad2: Quad): Int = {
     if(quad1 == null || quad2 == null)
       throw new IllegalArgumentException("Comparing Quad with null: ")
     if(initalPrefix == null){                   //use the complete string to compare - record the longest common prefix
+
       val zw1 = FilterTarget.resolveQuadResource(quad1, target)
       val zw2 = FilterTarget.resolveQuadResource(quad2, target)
       val res = stringComp.compare(zw1, zw2)
@@ -25,7 +26,7 @@ class QuadComparator(val target: FilterTarget.Value, val initalPrefix:String = n
         case cpc: CodePointComparator => zw1.substring(0, stringComp.asInstanceOf[CodePointComparator].getShortestCharDiffPosition)
         case _ => zw1
       }
-      commonPrefix = StringUtils.getLongestPrefix(commonPrefix, pre)
+      commonPrefix = if(commonPrefix == null) pre else StringUtils.getLongestPrefix(commonPrefix, pre)
       res
     }
     else{                                       //subtract the prefix and compare
