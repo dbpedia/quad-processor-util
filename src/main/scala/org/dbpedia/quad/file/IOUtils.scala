@@ -2,13 +2,14 @@ package org.dbpedia.quad.file
 
 import java.io._
 import java.nio.charset.Charset
-import java.nio.file.Files
 import java.util.zip.{GZIPInputStream, GZIPOutputStream, Inflater, InflaterInputStream}
 
 import org.apache.commons.compress.compressors.bzip2.{BZip2CompressorInputStream, BZip2CompressorOutputStream}
 
 import scala.io.Codec
 import scala.util.{Failure, Success, Try}
+
+import RichFile._
 
 /**
  * TODO: modify the bzip code such that there are no run-time dependencies on commons-compress.
@@ -78,6 +79,14 @@ object IOUtils {
     1000000/compressedBytes
   }
 
+  def forceFileDelete(files: File*): Unit ={
+    for(f <- files){
+      if(f.isDirectory)
+        forceFileDelete(f.getFile.listFiles():_*)
+      f.setWritable(true)
+      f.delete()
+    }
+  }
 
   /**
     * a simple concatenation of files with bash - cat also allows for concatenating compressed files
@@ -101,10 +110,7 @@ object IOUtils {
           tmpFile
         }
       val ret = concatFileInternal(tempFiles.toSeq, outFile)
-      tempFiles.foreach(f => {
-        f.getFile.setWritable(true)
-        f.delete()
-      })
+      forceFileDelete(Array(tempFiles.toList:_*).map(_.getFile):_*)
       ret
     }
     else

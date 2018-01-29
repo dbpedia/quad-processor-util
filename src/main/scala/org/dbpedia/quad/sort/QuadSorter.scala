@@ -8,6 +8,7 @@ import java.util.concurrent.ConcurrentHashMap
 import org.dbpedia.quad.Quad
 import org.dbpedia.quad.config.Config
 import org.dbpedia.quad.destination.{Destination, FileDestination}
+import org.dbpedia.quad.file.IOUtils.forceFileDelete
 import org.dbpedia.quad.file._
 import org.dbpedia.quad.formatters.Formatter
 import org.dbpedia.quad.log.{LogRecorder, RecordSeverity}
@@ -330,8 +331,7 @@ class QuadSorter(val config: QuadSorterConfig) {
       recorder.printLabeledLine("Finished sorting file " + outFile, RecordSeverity.Warning)
       ret.append(new RichFile(outFile))
     }
-    if(tempFolder.listFiles().isEmpty)
-      Files.delete(tempFolder.toPath)
+    forceFileDelete(tempFolder)
     ret.toList
   }
 
@@ -369,14 +369,12 @@ class QuadSorter(val config: QuadSorterConfig) {
       ))
 
     var fileList: List[(PrefixRecord, FileDestination)] = List()
-    //finalMergeWorkerParams.foreach(params => {
-      val finalPromise = finalMergeSinkWorker.work(finalMergeWorkerParams.toList)
-      val futureList = PromisedWork.waitPromises(finalPromise)
-      PromisedWork.waitFutures(List(futureList.andThen {
-        case Success(files) => fileList = fileList ::: files.toList
-        case Failure(f) => throw new RuntimeException("Writing the output file failed: " + f.getMessage)
-      }))
-    //})
+    val finalPromise = finalMergeSinkWorker.work(finalMergeWorkerParams.toList)
+    val futureList = PromisedWork.waitPromises(finalPromise)
+    PromisedWork.waitFutures(List(futureList.andThen {
+      case Success(files) => fileList = fileList ::: files.toList
+      case Failure(f) => throw new RuntimeException("Writing the output file failed: " + f.getMessage)
+    }))
 
     val (header, footer) = createHeaderFooter(metadata)
 
@@ -387,8 +385,8 @@ class QuadSorter(val config: QuadSorterConfig) {
     if (!IOUtils.concatFile(files, new RichFile(outFile), Some(tempFolder)))
       throw new RuntimeException("Concatenating temporary files failed!")
 
-    files.foreach(f => Files.delete(f.getFile.toPath))
-    segmentMap.values.foreach(f => Files.delete(f.getFile.toPath))
+    forceFileDelete(files.map(_.getFile):_*)
+    forceFileDelete(segmentMap.values.map(_.getFile).toSeq:_*)
   }
 
   private def createHeaderFooter(metadata: StreamSourceMetaData) ={
@@ -622,7 +620,7 @@ class QuadSorter(val config: QuadSorterConfig) {
       if(! IOUtils.concatFile(fileList, outFile, Some(tempFolder)))
         throw new RuntimeException("Concatenating temporary files failed!")
     }
-    destinations.foreach(x => Files.delete(x._2.file.toPath))
+    forceFileDelete(destinations.map(_._2.file):_*)
   }
 
   private def getPureDestination(file: String, prefix: Int): FileDestination ={
