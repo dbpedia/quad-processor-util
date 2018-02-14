@@ -1,7 +1,7 @@
 package org.dbpedia.quad.sort
 
 import java.io.{File, FileNotFoundException}
-import java.nio.file.{Files, Paths}
+import java.nio.file.Paths
 import java.util.Date
 import java.util.concurrent.ConcurrentHashMap
 

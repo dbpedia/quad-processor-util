@@ -133,6 +133,23 @@ object IOUtils {
     ret == 0
   }
 
+  /**
+    * Will sort a given file in parallel
+    * @param file
+    * @param outFile
+    * @return
+    */
+  def sortFile(file: FileLike[_], outFile: FileLike[_]): Boolean ={
+    val sortCommand = "bzip2 -cd \"" + file.getFile.getAbsolutePath +
+      "\" | sort --parallel=8 --batch-size=512 --buffer-size=50% |  parallel --pipe --recend '' -k bzip2 > \"" +
+      outFile.getFile.getAbsolutePath + "\" ;"
+
+    val camArray = collection.JavaConversions.seqAsJavaList(List( "/bin/bash", "-c", sortCommand ))
+    val pb = new ProcessBuilder(camArray)
+    val ret = Integer.valueOf(pb.start().waitFor())
+    ret == 0
+  }
+
   def createStreamSource(uri: String): RichUrl ={
     Option(IOUtils.getClass.getClassLoader.getResource(uri)) match{
       case Some(u) => new RichUrl(u)
